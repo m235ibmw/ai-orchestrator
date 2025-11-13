@@ -3,13 +3,16 @@ import fetch from 'node-fetch';
 const OWNER = 'm235ibmw';
 const REPO = 'ai-orchestrator';
 
+// 取得したい markdown ファイルのパス（必要なら .env 化）
+const WORKFLOW_LIST_PATH = 'workflows/index.md';
+
 /**
- * GitHub の workflows ディレクトリから Markdown ファイル一覧を取得
+ * GitHub の workflow_list.md を取得してテキストで返す
  */
 export async function getWorkflowList() {
-  const apiUrl = `https://api.github.com/repos/${OWNER}/${REPO}/contents/workflows`;
+  const url = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${WORKFLOW_LIST_PATH}`;
 
-  const res = await fetch(apiUrl, {
+  const res = await fetch(url, {
     headers: {
       'User-Agent': 'ai-orchestrator-mcp',
       Accept: 'application/vnd.github.v3+json',
@@ -17,52 +20,21 @@ export async function getWorkflowList() {
   });
 
   if (!res.ok) {
+    console.error('[GitHub API ERROR]', res.status, res.statusText);
     return {
-      error: true,
-      message: `GitHub API error: ${res.status} ${res.statusText}`,
+      ok: false,
+      error: `GitHub returned ${res.status}`,
     };
   }
 
-  const data = await res.json();
+  // GitHub は Base64 で返してくるので decode が必要
+  const json = (await res.json()) as any;
 
-  // フォルダ以下も欲しいので、子ディレクトリを掘る
-  const workflows: any[] = [];
-
-  for (const item of data) {
-    if (item.type === 'file' && item.name.endsWith('.md')) {
-      workflows.push({
-        name: item.name,
-        path: item.path,
-        type: 'file',
-        download_url: item.download_url,
-      });
-    }
-
-    if (item.type === 'dir') {
-      const childUrl = `https://api.github.com/repos/${OWNER}/${REPO}/contents/${item.path}`;
-      const childRes = await fetch(childUrl, {
-        headers: { 'User-Agent': 'ai-orchestrator-mcp' },
-      });
-
-      if (childRes.ok) {
-        const childData = await childRes.json();
-        for (const c of childData) {
-          if (c.type === 'file' && c.name.endsWith('.md')) {
-            workflows.push({
-              name: c.name,
-              path: c.path,
-              type: 'file',
-              download_url: c.download_url,
-            });
-          }
-        }
-      }
-    }
-  }
+  const contentBase64 = json.content;
+  const decodedText = Buffer.from(contentBase64, 'base64').toString('utf-8');
 
   return {
     ok: true,
-    count: workflows.length,
-    files: workflows,
+    text: decodedText,
   };
 }

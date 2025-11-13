@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { getWorkflowList } from './tools/github/getWorkflowList.ts';
+// import { getWorkflowList } from './tools/github/getWorkflowList.ts';
+import { getWorkflowList } from './tools/github/getWorkflowList.js';
 
 // --------------------------
 // SIMPLE DEBUG MODE
