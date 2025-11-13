@@ -25,6 +25,10 @@
     "nodemon": "^3.1.11",
     "prettier": "^3.6.2",
     "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.21.1"
   }
 }
