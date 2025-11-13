@@ -1,0 +1,37 @@
+import fs from "fs";
+import path from "path";
+import dotenv from "dotenv";
+
+export function configSync() {
+  const root = process.cwd();
+
+  const envPath = path.join(root, ".env");
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+  }
+
+  if (!process.env.PROJECT_ROOT) {
+    console.error("❌ PROJECT_ROOT is not set in .env");
+    process.exit(1);
+  }
+
+  const templatePath = path.join(root, "config/claude_config.template.json");
+
+  const targetPath =
+    process.env.CLAUDE_CONFIG_PATH ||
+    `${process.env.HOME}/Library/Application Support/Claude/claude_desktop_config.json`;
+
+  if (fs.existsSync(targetPath)) {
+    const backupPath = `${targetPath}.backup-${Date.now()}`;
+    fs.copyFileSync(targetPath, backupPath);
+    console.log(`🔄 Backup created: ${backupPath}`);
+  }
+
+  let content = fs.readFileSync(templatePath, "utf-8");
+  content = content.replace(/{{PROJECT_ROOT}}/g, process.env.PROJECT_ROOT);
+
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  fs.writeFileSync(targetPath, content, "utf-8");
+
+  console.log(`✅ Synced Claude config → ${targetPath}`);
+}

@@ -1,0 +1,17 @@
+{
+  "preferences": {
+    "menuBarEnabled": false,
+    "quickEntryShortcut": "off"
+  },
+  "mcpServers": {
+    "ai-orchestrator": {
+      "type": "process",
+      "command": "node",
+      "args": [
+        "{{PROJECT_ROOT}}/mcp-server/node_modules/.bin/ts-node",
+        "{{PROJECT_ROOT}}/mcp-server/src/index.ts"
+      ],
+      "cwd": "{{PROJECT_ROOT}}/mcp-server"
+    }
+  }
+}
