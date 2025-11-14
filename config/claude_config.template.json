@@ -13,5 +13,9 @@
       ],
       "cwd": "{{PROJECT_ROOT}}/mcp-server"
     }
+  },
+  "sequential-thinking": {
+    "command": "npx",
+    "args": ["-y", "@zengwenliang/mcp-server-sequential-thinking"]
   }
 }

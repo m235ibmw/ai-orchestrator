@@ -1,0 +1,218 @@
+{
+  "courses": [
+    {
+      "id": "world-history",
+      "name": "世界史概論",
+      "description": "古代から現代までの世界史を学ぶ授業です。",
+      "lessons": [
+        {
+          "id": "world-history-1",
+          "number": 1,
+          "title": "古代文明の誕生",
+          "description": "メソポタミア文明、エジプト文明などの古代文明について学びます。",
+          "pdfUrl": "/pdfs/world-history-1.pdf"
+        },
+        {
+          "id": "world-history-2",
+          "number": 2,
+          "title": "ギリシャ・ローマ時代",
+          "description": "古代ギリシャの民主制とローマ帝国の発展について理解します。",
+          "pdfUrl": "/pdfs/world-history-2.pdf"
+        },
+        {
+          "id": "world-history-3",
+          "number": 3,
+          "title": "中世ヨーロッパ",
+          "description": "封建制度と騎士道、十字軍遠征について学びます。",
+          "pdfUrl": "/pdfs/world-history-3.pdf"
+        },
+        {
+          "id": "world-history-4",
+          "number": 4,
+          "title": "ルネサンスと宗教改革",
+          "description": "文芸復興の影響と宗教改革の背景を理解します。",
+          "pdfUrl": "/pdfs/world-history-4.pdf"
+        },
+        {
+          "id": "world-history-5",
+          "number": 5,
+          "title": "産業革命と近代化",
+          "description": "産業革命が社会に与えた影響について考察します。",
+          "pdfUrl": "/pdfs/world-history-5.pdf"
+        }
+      ]
+    },
+    {
+      "id": "japanese-history",
+      "name": "日本史",
+      "description": "古代から現代までの日本の歴史を学びます。",
+      "lessons": [
+        {
+          "id": "japanese-history-1",
+          "number": 1,
+          "title": "縄文・弥生時代",
+          "description": "日本列島における人類の生活の始まりと農耕の開始について学びます。",
+          "pdfUrl": "/pdfs/japanese-history-1.pdf"
+        },
+        {
+          "id": "japanese-history-2",
+          "number": 2,
+          "title": "古墳時代と飛鳥時代",
+          "description": "大和政権の成立と仏教伝来について理解します。",
+          "pdfUrl": "/pdfs/japanese-history-2.pdf"
+        },
+        {
+          "id": "japanese-history-3",
+          "number": 3,
+          "title": "奈良・平安時代",
+          "description": "律令国家の形成と貴族文化の発展を学びます。",
+          "pdfUrl": "/pdfs/japanese-history-3.pdf"
+        },
+        {
+          "id": "japanese-history-4",
+          "number": 4,
+          "title": "鎌倉・室町時代",
+          "description": "武家政権の成立と南北朝の動乱について理解します。",
+          "pdfUrl": "/pdfs/japanese-history-4.pdf"
+        },
+        {
+          "id": "japanese-history-5",
+          "number": 5,
+          "title": "戦国時代と江戸幕府",
+          "description": "戦国時代の統一と江戸幕府による支配体制を学びます。",
+          "pdfUrl": "/pdfs/japanese-history-5.pdf"
+        }
+      ]
+    },
+    {
+      "id": "mathematics",
+      "name": "数学基礎",
+      "description": "微分積分学の基礎を学びます。",
+      "lessons": [
+        {
+          "id": "mathematics-1",
+          "number": 1,
+          "title": "関数と極限",
+          "description": "関数の概念と極限の基本的な性質について学びます。",
+          "pdfUrl": "/pdfs/mathematics-1.pdf"
+        },
+        {
+          "id": "mathematics-2",
+          "number": 2,
+          "title": "微分の基礎",
+          "description": "導関数の定義と基本的な微分公式を理解します。",
+          "pdfUrl": "/pdfs/mathematics-2.pdf"
+        },
+        {
+          "id": "mathematics-3",
+          "number": 3,
+          "title": "微分の応用",
+          "description": "関数の増減、極値、グラフの概形について学びます。",
+          "pdfUrl": "/pdfs/mathematics-3.pdf"
+        },
+        {
+          "id": "mathematics-4",
+          "number": 4,
+          "title": "積分の基礎",
+          "description": "不定積分と定積分の定義を理解します。",
+          "pdfUrl": "/pdfs/mathematics-4.pdf"
+        },
+        {
+          "id": "mathematics-5",
+          "number": 5,
+          "title": "積分の応用",
+          "description": "面積、体積、曲線の長さの計算方法を学びます。",
+          "pdfUrl": "/pdfs/mathematics-5.pdf"
+        }
+      ]
+    },
+    {
+      "id": "physics",
+      "name": "物理学入門",
+      "description": "力学の基礎から熱力学まで学びます。",
+      "lessons": [
+        {
+          "id": "physics-1",
+          "number": 1,
+          "title": "運動の法則",
+          "description": "ニュートンの運動の三法則について学びます。",
+          "pdfUrl": "/pdfs/physics-1.pdf"
+        },
+        {
+          "id": "physics-2",
+          "number": 2,
+          "title": "エネルギーと仕事",
+          "description": "仕事とエネルギーの関係、エネルギー保存則を理解します。",
+          "pdfUrl": "/pdfs/physics-2.pdf"
+        },
+        {
+          "id": "physics-3",
+          "number": 3,
+          "title": "運動量と衝突",
+          "description": "運動量保存則と弾性衝突、非弾性衝突について学びます。",
+          "pdfUrl": "/pdfs/physics-3.pdf"
+        },
+        {
+          "id": "physics-4",
+          "number": 4,
+          "title": "円運動と万有引力",
+          "description": "等速円運動と万有引力の法則を理解します。",
+          "pdfUrl": "/pdfs/physics-4.pdf"
+        },
+        {
+          "id": "physics-5",
+          "number": 5,
+          "title": "熱力学の基礎",
+          "description": "熱力学第一法則と第二法則について学びます。",
+          "pdfUrl": "/pdfs/physics-5.pdf"
+        }
+      ]
+    },
+    {
+      "id": "english",
+      "name": "英語コミュニケーション",
+      "description": "実践的な英語コミュニケーション能力を養います。",
+      "lessons": [
+        {
+          "id": "english-1",
+          "number": 1,
+          "title": "自己紹介とあいさつ",
+          "description": "基本的な自己紹介の表現と日常のあいさつを学びます。",
+          "pdfUrl": "/pdfs/english-1.pdf"
+        },
+        {
+          "id": "english-2",
+          "number": 2,
+          "title": "日常会話の基礎",
+          "description": "買い物や道案内などの日常的な場面での会話を練習します。",
+          "pdfUrl": "/pdfs/english-2.pdf"
+        },
+        {
+          "id": "english-3",
+          "number": 3,
+          "title": "ビジネス英語入門",
+          "description": "電話対応やメールの書き方など、ビジネスシーンで使える表現を学びます。",
+          "pdfUrl": "/pdfs/english-3.pdf"
+        },
+        {
+          "id": "english-4",
+          "number": 4,
+          "title": "プレゼンテーション技法",
+          "description": "効果的なプレゼンテーションの構成と表現方法を理解します。",
+          "pdfUrl": "/pdfs/english-4.pdf"
+        },
+        {
+          "id": "english-5",
+          "number": 5,
+          "title": "ディスカッションとディベート",
+          "description": "意見を論理的に述べる方法と、議論の進め方を学びます。",
+          "pdfUrl": "/pdfs/english-5.pdf"
+        }
+      ]
+    }
+  ],
+  "credentials": {
+    "username": "student",
+    "password": "password123"
+  }
+}
