@@ -23,7 +23,7 @@ export async function getWorkflowList() {
     };
   }
 
-  const data = await res.json();
+  const data = await res.json() as any;
 
   // フォルダ以下も欲しいので、子ディレクトリを掘る
   const workflows: any[] = [];
@@ -45,7 +45,7 @@ export async function getWorkflowList() {
       });
 
       if (childRes.ok) {
-        const childData = await childRes.json();
+        const childData: any = await childRes.json();
         for (const c of childData) {
           if (c.type === 'file' && c.name.endsWith('.md')) {
             workflows.push({

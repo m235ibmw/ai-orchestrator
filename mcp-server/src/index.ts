@@ -1,6 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { getWorkflowList } from './tools/github/getWorkflowList.ts';
+import { z } from 'zod';
+import { getWorkflowList } from './tools/github/getWorkflowList.js';
+import { getLessonPdfUrl, closeBrowser } from './tools/browser.js';
 
 // --------------------------
 // SIMPLE DEBUG MODE
@@ -69,6 +71,49 @@ server.registerTool(
     const list = await getWorkflowList();
     return {
       content: [{ type: 'text', text: JSON.stringify(list, null, 2) }],
+    };
+  },
+);
+
+server.registerTool(
+  'get-lesson-pdf-url',
+  {
+    description:
+      'Get PDF URL for a specific course lesson by navigating the classroom website using Puppeteer. Downloads the PDF and saves it to a temporary file, then returns the file path for Claude to read.',
+    inputSchema: {
+      course_name: z.string().describe('Name of the course (e.g., "世界史概論", "日本史")'),
+      lesson_number: z.number().describe('Lesson number (e.g., 1, 2, 3)'),
+      username: z.string().describe('Login username for the classroom site'),
+      password: z.string().describe('Login password for the classroom site'),
+      base_url: z.string().optional().describe('Base URL of the classroom site (default: http://localhost:3000)'),
+    },
+  },
+  async (params: any) => {
+    const { course_name, lesson_number, username, password, base_url } = params;
+
+    if (!course_name || !lesson_number || !username || !password) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: 'Missing required parameters: course_name, lesson_number, username, password',
+            }),
+          },
+        ],
+      };
+    }
+
+    const result = await getLessonPdfUrl(
+      course_name,
+      lesson_number,
+      { username, password },
+      base_url,
+    );
+
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
   },
 );
