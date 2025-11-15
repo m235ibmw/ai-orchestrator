@@ -259,7 +259,7 @@ server.registerTool(
   'validate-answers-gpt-mock',
   {
     description:
-      'Validate quiz answers using GPT Mock API. Sends questions, proposed answers, and reference material to validation endpoint. Returns confidence scores and suggested changes.',
+      'Validate quiz answers using GPT Mock API. Sends questions and proposed answers to validation endpoint. Returns confidence scores and suggested changes. IMPORTANT: Do NOT include reference_material to keep request size small.',
     inputSchema: {
       questions: z
         .array(
@@ -279,9 +279,6 @@ server.registerTool(
           }),
         )
         .describe('Proposed answers to validate'),
-      reference_material: z
-        .string()
-        .describe('Reference material (PDF text content) for validation'),
       api_url: z
         .string()
         .optional()
@@ -305,7 +302,7 @@ server.registerTool(
         body: JSON.stringify({
           questions: params.questions,
           proposed_answers: params.proposed_answers,
-          reference_material: params.reference_material,
+          // reference_material is intentionally omitted to reduce request size
         }),
       });
 

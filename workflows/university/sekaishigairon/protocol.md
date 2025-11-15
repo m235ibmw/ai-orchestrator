@@ -24,13 +24,67 @@
 
 ---
 
+## 🎨 UI PRESENTATION RULES（UI表示ルール）
+
+**Claude Desktop は以下のフォーマットを厳守してユーザーに表示すること：**
+
+1. **絵文字を削除しない** - 🔍 📡 ✓ ▶ などの絵文字は必ず保持する
+2. **罫線を削除しない** - `◤` `──────────────────────────────────` などの装飾は必ず保持する
+3. **インデントを保持する** - スペースによるインデント構造を崩さない
+4. **フォーマットを簡略化しない** - "見やすく"するために勝手に改変しない
+5. **STEP表示を統一する** - 必ず `◤ STEP X  タイトル` の形式を使う
+6. **エンジニア感を出す** - ターミナル風の洗練されたUIを維持する
+7. **Usage Exampleの通りに表示する** - protocol.mdのUsage Exampleセクションの形式を正確に再現する
+
+**重要**: このプロトコルのUIは、ユーザーがワークフローの進行状況を視覚的に把握するために設計されています。フォーマットを変更すると、ユーザーエクスペリエンスが著しく低下します。
+
+**禁止事項**:
+- ❌ 絵文字を削除して "Step 0.5: 学生特定" のように簡略化する
+- ❌ 罫線を削除して平文にする
+- ❌ "見やすく"するために箇条書きに変換する
+- ❌ インデントを削除してフラットにする
+
+**正しい例**:
+```
+◤ STEP 0.5  学生特定プロトコル
+──────────────────────────────────
+🔍 入力された名前: "くりはら"
+
+🧬 正規化（Hiragana → Romaji）
+    → "kurihara" で検索
+
+📡 Google Sheets をスキャン中…
+
+✓ 2名の候補を検出
+  1. kurihara yuya (12345A)
+  2. kurihara takeshi (12346B)
+
+▶ どちらですか？（番号 or 名前）
+```
+
+**誤った例（これは絶対に避ける）**:
+```
+Step 0.5: 学生特定
+
+入力された名前: "くりはら"
+正規化: "kurihara"
+Google Sheets を検索中...
+
+候補:
+- kurihara yuya (12345A)
+- kurihara takeshi (12346B)
+
+どちらですか？
+```
+
+---
+
 ## Prerequisites
 
 ### Required MCP Servers
 
 1. **ai-orchestrator** - Custom MCP server with classroom automation tools
 2. **gsheets** - Google Sheets integration for credential management
-3. **sequential-thinking** (optional) - Enhanced reasoning capabilities
 
 ### Required Data
 
@@ -54,6 +108,8 @@
 **Tool**: `gsheets` MCP tool (read-only)
 
 **Action**: Flexible name search with Claude reasoning and user confirmation
+
+**Display Format**: MUST use the format shown in "Example Interaction" below with all emojis and formatting preserved
 
 **Process**:
 
@@ -124,18 +180,25 @@
 User: "世界史概論お願い。くりはらです。"
 
 Claude:
-「くりはら」で検索します...
+◤ STEP 0.5  学生特定プロトコル
+──────────────────────────────────
+🔍 入力された名前: "くりはら"
 
-以下の候補が見つかりました:
-1. kurihara yuya (学籍番号: 12345A)
-2. kurihara takeshi (学籍番号: 12346B)
+🧬 正規化（Hiragana → Romaji）
+    → "kurihara" で検索
 
-どちらですか？番号または名前を教えてください。
+📡 Google Sheets をスキャン中…
+
+✓ 2名の候補を検出
+  1. kurihara yuya (12345A)
+  2. kurihara takeshi (12346B)
+
+▶ どちらですか？（番号 or 名前）
 
 User: "1"
 
 Claude:
-承知しました。kurihara yuya (12345A) で進めます。
+✓ kurihara yuya (12345A) で進めます。
 ```
 
 **Error Handling**:
@@ -344,7 +407,7 @@ DO NOT skip Step 3. The MCP server has already extracted the PDF text content fo
 
 **Endpoint**: `http://localhost:3000/api/gpt-mock`
 
-**Input**:
+**Input** (lightweight - no reference material):
 
 ```json
 {
@@ -352,6 +415,8 @@ DO NOT skip Step 3. The MCP server has already extracted the PDF text content fo
   "proposed_answers": [...]  // from Step 5
 }
 ```
+
+**Note**: Do NOT include `reference_material` field. Only send questions and proposed answers to minimize request size.
 
 **Expected Output**:
 
@@ -391,34 +456,7 @@ This step validates that:
 
 ---
 
-### Step 7: Record to Notion (Preparation for submission)
-
-**Tool**: `notion` MCP tool (to be configured)
-
-**Action**: Save submission record to Notion database
-
-**Database**: "課題提出記録" (Assignment Submission Records)
-
-**Properties**:
-
-```json
-{
-  "title": "世界史概論 第2回",
-  "student_name": "kurihara yuya",
-  "student_id": "12345A",
-  "course": "世界史概論",
-  "lesson_number": 2,
-  "submission_status": "pending_approval",
-  "answers": [...],
-  "created_at": "2025-11-15T10:00:00Z"
-}
-```
-
-**Note**: This step requires Notion MCP configuration (pending)
-
----
-
-### Step 8: Human-in-the-Loop Approval (HITL)
+### Step 7: Human-in-the-Loop Approval (HITL)
 
 **Tool**: User interaction via Claude Desktop chat
 
@@ -427,30 +465,39 @@ This step validates that:
 **Display Format**:
 
 ```
-=== 世界史概論 第2回 回答確認 ===
+◤ STEP 7  HUMAN CHECKPOINT
+──────────────────────────────────
+以下が最終回答案です。
 
 問1: 古代ギリシャで発展した政治制度は？
 回答: 民主制
-根拠: PDFのp.3に「アテネでは紀元前5世紀に民主制が発展...」と記載
+根拠: PDFに「アテネでは紀元前5世紀に民主制が発展...」と記載
 
 問2: ローマ共和制の最高執政官の名称は？
 回答: 執政官（コンスル）
-根拠: PDFのp.7に「共和制ローマの最高執政官はコンスルと呼ばれ...」と記載
+根拠: PDFに「共和制ローマの最高執政官はコンスルと呼ばれ...」と記載
 
-...
+問3: パックス・ロマーナとは何を意味するか？
+回答: ローマによる平和
 
-上記の回答で送信してよろしいですか？ (yes/no)
+問4: ローマ帝国が東西に分割されたのは西暦何年か？
+回答: 395年
+
+問5: 古代ローマを代表する建築物は？
+回答: コロッセオ
+
+▶ この回答を提出しますか？
+   yes / no
 ```
 
 **User Response**:
 
-- "yes" → Proceed to Step 9
+- "yes" → Proceed to Step 8
 - "no" → User provides corrections, update answers, return to this step
-- "skip" → Save to Notion as draft but don't submit
 
 ---
 
-### Step 9: Submit to Google Form
+### Step 8: Submit to Google Form
 
 **Tool**: `ai-orchestrator` > `submit-google-form`
 
@@ -486,26 +533,7 @@ This step validates that:
 
 - Submission failure: Retry once
 - Answer mismatch error: Verify answer text matches choices exactly
-- Network timeout: Notify user, save draft to Notion
-
----
-
-### Step 10: Update Notion Record
-
-**Tool**: `notion` MCP tool
-
-**Action**: Update submission record to mark as completed
-
-**Update**:
-
-```json
-{
-  "submission_status": "submitted",
-  "submitted_at": "2025-11-15T10:30:00Z",
-  "submission_result": "success",
-  "form_response_message": "回答を記録しました。ご協力ありがとうございました。"
-}
-```
+- Network timeout: Notify user
 
 ---
 
@@ -525,7 +553,6 @@ This step validates that:
 
 ### Non-blocking Errors (Log and Continue)
 
-- Notion API unavailable → Log locally and continue
 - GPT Mock API down → Skip validation step, use first-pass answers
 
 ## Success Criteria
@@ -533,8 +560,7 @@ This step validates that:
 1. All questions answered with valid choices
 2. Answers demonstrate understanding of PDF content
 3. Form submission successful
-4. Notion record created (if available)
-5. User approval obtained (HITL)
+4. User approval obtained (HITL)
 
 ## Usage Example
 
@@ -549,13 +575,20 @@ This step validates that:
 ```
 承知しました。世界史概論 第2回の課題処理を開始します。
 
-[Step 0.5] 「くりはら」で学生情報を検索中...
+◤ STEP 0.5  学生特定プロトコル
+──────────────────────────────────
+🔍 入力された名前: "くりはら"
 
-以下の候補が見つかりました:
-1. kurihara yuya (学籍番号: 12345A)
-2. kurihara takeshi (学籍番号: 12346B)
+🧬 正規化（Hiragana → Romaji）
+    → "kurihara" で検索
 
-どちらですか？番号または名前を教えてください。
+📡 Google Sheets をスキャン中…
+
+✓ 2名の候補を検出
+  1. kurihara yuya (12345A)
+  2. kurihara takeshi (12346B)
+
+▶ どちらですか？（番号 or 名前）
 ```
 
 **User**: `1`
@@ -565,25 +598,102 @@ This step validates that:
 ```
 ✓ kurihara yuya (12345A) で進めます。
 
-[Step 2] 教室サイトにログインしてPDFを取得中...
-✓ PDF取得完了: 世界史概論 第2回 ギリシャ・ローマ時代
+◤ STEP 2  教室システムへログイン
+──────────────────────────────────
+🔐 認証中…（student）
 
-[Step 3] PDFテキスト内容を確認中...
-✓ 内容確認完了: ギリシャ・ローマ時代について詳細な教材
+🌍 アクセス: http://localhost:3000/home
 
-[Step 4] Google Formの問題を取得中...
-✓ 5問の確認テストを検出
+✓ 認証成功
 
-[Step 5] PDFを参照して回答を生成中...
-✓ 全5問の回答を作成
+📁 対象科目: 世界史概論
+📚 レッスン: 第2回
 
-[Step 6] 回答を検証中...
-✓ 信頼度スコア: 平均0.95
+🛰 教材PDF URL を探索…
+📄 PDF ダウンロード中…
+🔎 PDF パース中（pdf-parse）
 
-[Step 8] 回答確認をお願いします:
-[回答一覧を表示]
+✓ PDFテキスト抽出完了（1,245文字）
 
-送信してよろしいですか？
+◤ STEP 3  教材解析フェーズ
+──────────────────────────────────
+🧪 内容検証中…
+
+- ギリシャ民主制 → 検出
+- ローマ共和制 → 検出
+- パックス・ロマーナ → 検出
+
+✓ 教材として有効と判断
+
+◤ STEP 4  Google Form 読み取り
+──────────────────────────────────
+🔗 フォームURL解析中…
+
+🛰 Puppeteer: DOMツリー読み取り
+📝 設問抽出… 5問検出
+
+✓ 設問データ構築完了
+
+◤ STEP 5  AI推論（一次回答生成）
+──────────────────────────────────
+🧠 教材 × 設問 をマッチング中…
+
+  問1 → 民主制
+  問2 → 執政官（コンスル）
+  問3 → ローマによる平和
+  問4 → 395年
+  問5 → コロッセオ
+
+✓ 一次回答が完成しました
+
+◤ STEP 6  回答校正フェーズ
+──────────────────────────────────
+📡 GPT Mock API に送信…
+
+💬 返答:
+   → 全回答が妥当
+   → 整合性スコア: 0.95
+
+✓ 校正完了（変更なし）
+
+◤ STEP 7  HUMAN CHECKPOINT
+──────────────────────────────────
+以下が最終回答案です。
+
+問1: 古代ギリシャで発展した政治制度は？
+回答: 民主制
+
+問2: ローマ共和制の最高執政官の名称は？
+回答: 執政官（コンスル）
+
+問3: パックス・ロマーナとは何を意味するか？
+回答: ローマによる平和
+
+問4: ローマ帝国が東西に分割されたのは西暦何年か？
+回答: 395年
+
+問5: 古代ローマを代表する建築物は？
+回答: コロッセオ
+
+▶ この回答を提出しますか？
+   yes / no
+```
+
+**User**: `yes`
+
+**Claude**:
+
+```
+◤ STEP 8  自動提出フェーズ
+──────────────────────────────────
+📝 Google Form へ入力中…
+📨 送信中…
+
+✓ 提出成功
+💬 「回答を記録しました。ご協力ありがとうございました。」
+
+──────────────────────────────────
+✅ ワークフロー完了
 ```
 
 ---
@@ -597,7 +707,14 @@ This step validates that:
 **Claude Desktop Response**:
 
 ```
-承知しました。お名前を教えていただけますか？（例: 栗原 または kurihara）
+承知しました。
+
+◤ STEP 0.5  学生特定プロトコル
+──────────────────────────────────
+⚠ 名前が未入力です
+
+▶ お名前を教えていただけますか？
+   （例: 栗原 または kurihara）
 ```
 
 **User**: `栗原`
@@ -605,9 +722,20 @@ This step validates that:
 **Claude**:
 
 ```
-「栗原」で検索します...
+◤ STEP 0.5  学生特定プロトコル
+──────────────────────────────────
+🔍 入力された名前: "栗原"
 
-「kurihara yuya (12345A)」が見つかりました。この方で進めてよろしいですか？
+🧬 正規化（Kanji → Romaji）
+    → "kurihara" で検索
+
+📡 Google Sheets をスキャン中…
+
+✓ 1名の候補を検出
+  • kurihara yuya (12345A)
+
+▶ この方で進めてよろしいですか？
+   yes / no
 ```
 
 **User**: `yes`
@@ -616,6 +744,7 @@ This step validates that:
 
 ```
 ✓ kurihara yuya (12345A) で課題処理を開始します。
+
 [Step 2へ進む...]
 ```
 
