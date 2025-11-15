@@ -130,9 +130,18 @@ Google Sheets を検索中...
 
 3. **Fetch All Credentials from Google Sheets**:
    ```
-   Tool: gsheets MCP
-   Action: Read all rows from sheet "認証情報"
-   Spreadsheet ID: {{SPREADSHEET_ID}}
+   Tool: gsheets MCP (gsheets_read_range)
+   Spreadsheet ID: 1dkiU9nBKAzpYuJGwcIwBWTcnvHlRxu6MzNf9nzxfuNQ
+   Range: 認証情報!A:Z
+
+   Expected Response Format:
+   {
+     "values": [
+       ["name", "student_id", "classroom_username", "classroom_password"],
+       ["kurihara yuya", "12345A", "student", "password123"],
+       ...
+     ]
+   }
    ```
 
 4. **Filter Candidates** (Claude performs this):
