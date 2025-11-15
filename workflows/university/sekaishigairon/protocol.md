@@ -4,7 +4,7 @@
 
 ## Status
 
-- Version: 1.0.0
+- Version: 1.1.0
 - Purpose: Claude Desktop がこの手順を読み、MCP tools を呼び出しながら自動課題処理を実行する
 - Last Updated: 2025-11-15
 
@@ -34,10 +34,13 @@
 
 ### Required Data
 
-- Student ID (e.g., "12345A")
+- Student name (any format: Kanji "栗原", Hiragana "くりはら", or Romaji "kurihara")
+  - Claude will automatically convert and search
 - Course name (e.g., "世界史概論")
 - Lesson number (e.g., 2)
 - Google Spreadsheet ID with credentials sheet named "認証情報"
+  - Sheet structure: `name | student_id | classroom_username | classroom_password`
+  - Name column must be in romaji format (e.g., "kurihara yuya")
 
 ### Running Services
 
@@ -46,9 +49,65 @@
 
 ## Workflow Steps
 
-### Step 0: Check Prerequisites & Use Demo Data
+### Step 0.5: Identify Student by Name with Flexible Search
 
-**IMPORTANT**: For demo/testing purposes, use the following hardcoded credentials instead of Google Sheets:
+**Tool**: `gsheets` MCP tool (read-only)
+
+**Action**: Flexible name search with Claude reasoning and user confirmation
+
+**Process**:
+
+1. **Check User Input** (accept any format):
+   - 漢字: "栗原", "栗原裕也"
+   - ひらがな: "くり", "くりはら"
+   - ローマ字: "kuri", "kurihara", "kurihara yuya"
+   - If no name provided, ask: "お名前を教えていただけますか？（例: 栗原 または kurihara）"
+
+2. **Claude Reasoning - Convert to Search Pattern**:
+   - Automatically convert Japanese to romaji using Claude's language understanding
+   - Examples:
+     - "栗原" → search for "kurihara"
+     - "くりはら" → search for "kurihara"
+     - "くり" → search for "kuri"
+     - "kurihara" → search as-is
+   - Use lowercase for matching
+
+3. **Fetch All Credentials from Google Sheets**:
+   ```
+   Tool: gsheets MCP
+   Action: Read all rows from sheet "認証情報"
+   Spreadsheet ID: {{SPREADSHEET_ID}}
+   ```
+
+4. **Filter Candidates** (Claude performs this):
+   - Filter rows where `name` column contains the search pattern (case-insensitive, partial match)
+   - Example: "kuri" matches "kurihara yuya", "kurihara takeshi", "kurita masaki"
+
+5. **Present Candidates to User**:
+   - **If 1 match found**: Auto-select and confirm with user
+     ```
+     「kurihara yuya (12345A)」が見つかりました。この方で進めてよろしいですか？
+     ```
+   - **If multiple matches**: Present numbered list
+     ```
+     以下の候補が見つかりました:
+     1. kurihara yuya (学籍番号: 12345A)
+     2. kurihara takeshi (学籍番号: 12346B)
+     3. kurita masaki (学籍番号: 12347C)
+
+     どちらですか？番号または名前を教えてください。
+     ```
+   - **If no matches**: Ask for retry
+     ```
+     「くり」では見つかりませんでした。
+     フルネームまたは別の表記で教えていただけますか？
+     ```
+
+6. **User Confirmation**:
+   - Accept: Number (e.g., "1"), full name (e.g., "kurihara yuya"), or confirmation (e.g., "yes", "OK")
+   - Process user selection and extract full credentials
+
+**Output** (store for use in subsequent steps):
 
 ```json
 {
@@ -59,51 +118,85 @@
 }
 ```
 
-**Form URL for 世界史概論 第 2 回**:
+**Example Interaction**:
 
 ```
-https://docs.google.com/forms/d/e/1FAIpQLSfIZgtHH8FJudeMNlW1oyzmI8LKqHiZD9jkP-UYSeTIGdVtww/viewform
-```
+User: "世界史概論お願い。くりはらです。"
 
-**Skip to Step 2 directly** using above credentials.
+Claude:
+「くりはら」で検索します...
 
----
+以下の候補が見つかりました:
+1. kurihara yuya (学籍番号: 12345A)
+2. kurihara takeshi (学籍番号: 12346B)
 
-### Step 1: Retrieve Student Credentials (OPTIONAL - for production)
+どちらですか？番号または名前を教えてください。
 
-**Tool**: `gsheets` MCP tool
+User: "1"
 
-**Action**: Retrieve student credentials from Google Sheets by student_id
-
-**Input**:
-
-- Spreadsheet ID
-- Sheet name: "認証情報"
-- Query: student_id column matches the target student ID
-
-**Output**:
-
-```json
-{
-  "name": "kurihara yuya",
-  "student_id": "12345A",
-  "classroom_username": "student",
-  "classroom_password": "password123"
-}
+Claude:
+承知しました。kurihara yuya (12345A) で進めます。
 ```
 
 **Error Handling**:
 
-- If student not found, abort workflow and notify user
-- If sheet not accessible, check service account permissions
-- **If gsheets tool not configured, use demo data from Step 0**
+- No matches → Ask for different spelling or full name
+- Multiple matches + ambiguous response → Ask again with clear options
+- Invalid choice number → "1〜3の番号を選択してください"
+- gsheets tool not available → Abort and notify user to configure gsheets MCP
+
+**Security Note**:
+- `classroom_password` is never displayed to user
+- Only used internally for Step 2 login
+
+---
+
+### Step 1: Credentials Retrieved
+
+**Note**: Credentials are already retrieved in Step 0.5 above.
+
+**Stored Data** (from Step 0.5):
+
+```json
+{
+  "name": "kurihara yuya",
+  "student_id": "12345A",
+  "classroom_username": "student",
+  "classroom_password": "password123"
+}
+```
+
+**Action**: Verify all required fields are present before proceeding to Step 2.
+
+**Validation**:
+- ✓ `name` is not empty
+- ✓ `student_id` is not empty
+- ✓ `classroom_username` is not empty
+- ✓ `classroom_password` is not empty
+
+**If any field is missing**: Abort workflow and notify user
 
 ---
 
 ### Step 2: Login to LMS and Retrieve Course Material with PDF Text
 
-**CRITICAL**: You MUST call the MCP tool `get-lesson-pdf-url` with these exact parameters:
+**Tool**: `ai-orchestrator` > `get-lesson-pdf-url`
 
+**Action**: Login to classroom site using credentials from Step 0.5 and retrieve PDF with text content
+
+**CRITICAL**: You MUST call the MCP tool `get-lesson-pdf-url` with credentials from Step 0.5:
+
+```json
+{
+  "course_name": "世界史概論",
+  "lesson_number": 2,
+  "username": "{{classroom_username from Step 0.5}}",
+  "password": "{{classroom_password from Step 0.5}}",
+  "base_url": "http://localhost:3000"
+}
+```
+
+**Example** (using credentials from Step 0.5):
 ```json
 {
   "course_name": "世界史概論",
@@ -445,10 +538,10 @@ This step validates that:
 
 ## Usage Example
 
-**User Request**:
+**User Request (Example 1 - Hiragana)**:
 
 ```
-世界史概論の第2回の課題お願い。学籍番号は12345A。
+世界史概論の第2回の課題お願い。くりはらです。
 ```
 
 **Claude Desktop Response**:
@@ -456,14 +549,27 @@ This step validates that:
 ```
 承知しました。世界史概論 第2回の課題処理を開始します。
 
-[Step 1] Google Sheetsから認証情報を取得中...
-✓ 取得完了: kurihara yuya (12345A)
+[Step 0.5] 「くりはら」で学生情報を検索中...
+
+以下の候補が見つかりました:
+1. kurihara yuya (学籍番号: 12345A)
+2. kurihara takeshi (学籍番号: 12346B)
+
+どちらですか？番号または名前を教えてください。
+```
+
+**User**: `1`
+
+**Claude**:
+
+```
+✓ kurihara yuya (12345A) で進めます。
 
 [Step 2] 教室サイトにログインしてPDFを取得中...
-✓ PDF取得完了: /tmp/世界史概論-lesson-2.pdf
+✓ PDF取得完了: 世界史概論 第2回 ギリシャ・ローマ時代
 
-[Step 3] PDFを読み込み中...
-✓ 内容確認完了: ギリシャ・ローマ時代について15ページの教材
+[Step 3] PDFテキスト内容を確認中...
+✓ 内容確認完了: ギリシャ・ローマ時代について詳細な教材
 
 [Step 4] Google Formの問題を取得中...
 ✓ 5問の確認テストを検出
@@ -472,12 +578,45 @@ This step validates that:
 ✓ 全5問の回答を作成
 
 [Step 6] 回答を検証中...
-✓ 信頼度スコア: 平均0.92
+✓ 信頼度スコア: 平均0.95
 
-以下の回答内容を確認してください:
+[Step 8] 回答確認をお願いします:
 [回答一覧を表示]
 
 送信してよろしいですか？
+```
+
+---
+
+**User Request (Example 2 - Kanji, no name)**:
+
+```
+世界史概論の課題お願い
+```
+
+**Claude Desktop Response**:
+
+```
+承知しました。お名前を教えていただけますか？（例: 栗原 または kurihara）
+```
+
+**User**: `栗原`
+
+**Claude**:
+
+```
+「栗原」で検索します...
+
+「kurihara yuya (12345A)」が見つかりました。この方で進めてよろしいですか？
+```
+
+**User**: `yes`
+
+**Claude**:
+
+```
+✓ kurihara yuya (12345A) で課題処理を開始します。
+[Step 2へ進む...]
 ```
 
 ## Maintenance Notes
@@ -488,6 +627,17 @@ This step validates that:
 - MCP server must be running before starting workflow
 
 ## Version History
+
+### 1.1.0 (2025-11-15)
+
+- **NEW**: Flexible name search with Claude reasoning (Step 0.5)
+  - Accept Japanese (Kanji/Hiragana) and Romaji input
+  - Automatic romaji conversion by Claude
+  - Partial match search with user confirmation
+  - Multi-candidate selection flow
+- Updated credential retrieval to use gsheets MCP read-only access
+- Removed hardcoded demo credentials (now production-ready)
+- Enhanced user interaction flow with detailed examples
 
 ### 1.0.0 (2025-11-15)
 
