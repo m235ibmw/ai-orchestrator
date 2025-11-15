@@ -2,6 +2,7 @@ import puppeteer, { Browser, Page } from 'puppeteer';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { PDFParse } from 'pdf-parse';
 
 interface LoginCredentials {
   username: string;
@@ -11,7 +12,7 @@ interface LoginCredentials {
 interface LessonInfo {
   success: boolean;
   pdf_url?: string;
-  pdf_file_path?: string;
+  pdf_text?: string;
   lesson_title?: string;
   course_name?: string;
   error?: string;
@@ -120,30 +121,71 @@ export async function getLessonPdfUrl(
       };
     }
 
-    // 6. PDFをダウンロードして一時ファイルに保存
-    const pdfResponse = await page.goto(pdfUrl, { waitUntil: 'networkidle2' });
+    // 6. PDFをダウンロード
+    console.error('[MCP] PDF URL:', pdfUrl);
 
-    if (!pdfResponse) {
+    // Get cookies from the page to make authenticated request
+    const cookies = await page.cookies();
+    const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+
+    // Use native fetch to download PDF with cookies
+    const fetchModule = await import('node-fetch');
+    const fetch = fetchModule.default;
+
+    const response = await fetch(pdfUrl, {
+      headers: {
+        'Cookie': cookieHeader,
+        'User-Agent': await page.evaluate(() => navigator.userAgent),
+      }
+    });
+
+    if (!response.ok) {
       return {
         success: false,
-        error: 'PDFのダウンロードに失敗しました',
+        error: `PDFのダウンロードに失敗しました (HTTP ${response.status})`,
       };
     }
 
-    const pdfBuffer = await pdfResponse.buffer();
+    const buffer = Buffer.from(await response.arrayBuffer());
+    console.error('[MCP] Downloaded PDF, size:', buffer.length, 'bytes');
 
-    // 一時ディレクトリにPDFを保存
+    // Verify it's actually a PDF by checking magic bytes
+    if (buffer.length < 4 || buffer.toString('utf-8', 0, 4) !== '%PDF') {
+      console.error('[MCP] Downloaded content is not a PDF. First 100 bytes:', buffer.toString('utf-8', 0, 100));
+      return {
+        success: false,
+        error: 'ダウンロードしたファイルがPDFではありませんでした',
+      };
+    }
+
+    // 7. 一時ディレクトリにPDFを保存
     const tmpDir = os.tmpdir();
-    const sanitizedCourseName = courseName.replace(/[^a-zA-Z0-9]/g, '-');
-    const pdfFileName = `${sanitizedCourseName}-lesson-${lessonNumber}.pdf`;
+    const timestamp = Date.now();
+    const pdfFileName = `course-${timestamp}-lesson-${lessonNumber}.pdf`;
     const pdfFilePath = path.join(tmpDir, pdfFileName);
+    fs.writeFileSync(pdfFilePath, buffer);
 
-    fs.writeFileSync(pdfFilePath, pdfBuffer);
+    // 8. PDFからテキストを抽出
+    let pdfText = '';
+    try {
+      // Parse PDF using file path
+      const parser = new PDFParse({ url: 'file://' + pdfFilePath });
+      const result = await parser.getText();
+      pdfText = result.text;
+
+      console.error('[MCP] PDF parsing succeeded, extracted', pdfText.length, 'characters');
+    } catch (parseError) {
+      console.error('[MCP] PDF parsing failed:', parseError);
+      pdfText = '[PDF text extraction failed]';
+    }
+
+    // Return localhost URL and extracted text
+    const localhostPdfUrl = `${baseUrl}/api/pdf/${pdfFileName}`;
 
     return {
       success: true,
-      pdf_url: pdfUrl,
-      pdf_file_path: pdfFilePath,
+      pdf_url: localhostPdfUrl,
+      pdf_text: pdfText,
       lesson_title: lessonTitle,
       course_name: courseName,
     };

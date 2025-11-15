@@ -6,6 +6,7 @@ export interface Lesson {
   title: string;
   description: string;
   pdfUrl: string;
+  formUrl?: string;
 }
 
 export interface Course {

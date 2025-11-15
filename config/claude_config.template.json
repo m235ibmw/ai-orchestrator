@@ -8,14 +8,13 @@
       "type": "process",
       "command": "node",
       "args": [
-        "{{PROJECT_ROOT}}/mcp-server/node_modules/.bin/ts-node",
-        "{{PROJECT_ROOT}}/mcp-server/src/index.ts"
+        "{{PROJECT_ROOT}}/mcp-server/dist/index.js"
       ],
       "cwd": "{{PROJECT_ROOT}}/mcp-server"
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@zengwenliang/mcp-server-sequential-thinking"]
     }
-  },
-  "sequential-thinking": {
-    "command": "npx",
-    "args": ["-y", "@zengwenliang/mcp-server-sequential-thinking"]
   }
 }

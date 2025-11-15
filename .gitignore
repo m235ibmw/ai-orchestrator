@@ -23,6 +23,9 @@ log/
 .env.local
 .env.*.local
 
+# Google Credentials (NEVER commit)
+config/google-credentials.json
+
 # Build
 dist/
 build/

@@ -64,6 +64,20 @@ export default async function ClassroomPage({ params }: PageProps) {
                   </a>
                 </div>
               </div>
+
+              {lesson.formUrl && lesson.formUrl !== 'PLACEHOLDER_FORM_URL' && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <h3 className="font-semibold mb-2">確認テスト</h3>
+                  <a
+                    href={lesson.formUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="form-link inline-block bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition"
+                  >
+                    確認テストに回答する
+                  </a>
+                </div>
+              )}
             </div>
           ))}
         </div>
