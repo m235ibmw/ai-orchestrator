@@ -61,56 +61,68 @@ export async function getGoogleFormQuestions(
 
     // フォームタイトルを取得
     const formTitle = await page
-      .$eval('.freebirdFormviewerViewHeaderTitle', (el) => el.textContent)
+      .$eval('[role="heading"][aria-level="1"]', (el) => el.textContent)
       .catch(() => 'タイトル不明');
 
-    // 各問題を取得
+    // 各問題を取得（名前・学籍番号などの入力フィールドをスキップ）
     const questions: FormQuestion[] = await page.evaluate(() => {
-      const items = document.querySelectorAll(
-        '.freebirdFormviewerViewNumberedItemContainer'
-      );
+      const items = document.querySelectorAll('[role="listitem"]');
 
-      return Array.from(items).map((item, index) => {
+      const results: any[] = [];
+      let questionNumber = 1;
+
+      Array.from(items).forEach((item) => {
         // 問題文を取得
-        const questionEl = item.querySelector(
-          '.freebirdFormviewerComponentsQuestionBaseTitle'
-        );
-        const questionText = questionEl ? questionEl.textContent || '' : '';
+        const questionEl = item.querySelector('.M7eMe');
+        const questionText = questionEl ? questionEl.textContent?.trim() || '' : '';
 
-        // 選択肢を取得（multiple choice の場合）
-        const choiceElements = item.querySelectorAll(
-          '.freebirdFormviewerComponentsQuestionRadioLabel'
-        );
-        const choices = Array.from(choiceElements).map(
-          (choice) => choice.textContent || ''
-        );
+        // テキスト入力フィールドがある場合はスキップ（名前・学籍番号など）
+        const hasTextInput = item.querySelectorAll('input[type="text"], textarea').length > 0;
+        if (hasTextInput) {
+          return; // スキップ
+        }
 
-        // checkbox の場合
-        const checkboxElements = item.querySelectorAll(
-          '.freebirdFormviewerComponentsQuestionCheckboxLabel'
-        );
-        const checkboxChoices = Array.from(checkboxElements).map(
-          (choice) => choice.textContent || ''
-        );
+        // ラジオボタンの選択肢を取得
+        const radioElements = item.querySelectorAll('[role="radio"]');
+        const radioChoices = Array.from(radioElements).map((radio) => {
+          // .aDTYNe is in a sibling element, not a child
+          const parent = radio.closest('.nWQGrd');
+          const labelEl = parent ? parent.querySelector('.aDTYNe') : null;
+          return labelEl ? labelEl.textContent?.trim() || '' : '';
+        }).filter(text => text !== '');
+
+        // チェックボックスの選択肢を取得
+        const checkboxElements = item.querySelectorAll('[role="checkbox"]');
+        const checkboxChoices = Array.from(checkboxElements).map((checkbox) => {
+          // .aDTYNe is in a sibling element, not a child
+          const parent = checkbox.closest('.nWQGrd');
+          const labelEl = parent ? parent.querySelector('.aDTYNe') : null;
+          return labelEl ? labelEl.textContent?.trim() || '' : '';
+        }).filter(text => text !== '');
 
         let questionType: 'multiple_choice' | 'checkbox' | 'text' = 'text';
         let finalChoices: string[] = [];
 
-        if (choices.length > 0) {
+        if (radioChoices.length > 0) {
           questionType = 'multiple_choice';
-          finalChoices = choices;
+          finalChoices = radioChoices;
         } else if (checkboxChoices.length > 0) {
           questionType = 'checkbox';
           finalChoices = checkboxChoices;
         }
 
-        return {
-          question_number: index + 1,
-          question_text: questionText,
-          choices: finalChoices,
-          question_type: questionType,
-        };
+        // 問題文があり、選択肢があるもののみを追加
+        if (questionText && (radioChoices.length > 0 || checkboxChoices.length > 0)) {
+          results.push({
+            question_number: questionNumber++,
+            question_text: questionText,
+            choices: finalChoices,
+            question_type: questionType,
+          });
+        }
       });
+
+      return results;
     });
 
     return {
@@ -164,64 +176,67 @@ export async function submitGoogleForm(
 
     // 各問題に回答
     for (const answer of answers) {
+      // 全ての listitem を取得し、テキスト入力をスキップして質問のみを取得
+      const allItems = await page.$$('[role="listitem"]');
+
+      const questionItems = [];
+      for (const item of allItems) {
+        const hasTextInput = await item.$$('input[type="text"], textarea');
+        if (hasTextInput.length === 0) {
+          questionItems.push(item);
+        }
+      }
+
       const questionIndex = answer.question_number - 1; // 0-indexed
 
-      // 問題コンテナを取得
-      const itemContainers = await page.$$(
-        '.freebirdFormviewerViewNumberedItemContainer'
-      );
-
-      if (questionIndex >= itemContainers.length) {
+      if (questionIndex >= questionItems.length) {
         throw new Error(
-          `問${answer.question_number}が見つかりません（全${itemContainers.length}問）`
+          `問${answer.question_number}が見つかりません（全${questionItems.length}問）`
         );
       }
 
-      const itemContainer = itemContainers[questionIndex];
+      const itemContainer = questionItems[questionIndex];
 
       if (!itemContainer) {
         throw new Error(`問${answer.question_number}のコンテナが見つかりません`);
       }
 
       // Multiple choice の場合
-      const radioLabels = await itemContainer.$$(
-        '.freebirdFormviewerComponentsQuestionRadioLabel'
-      );
+      const radioElements = await itemContainer.$$('[role="radio"]');
 
-      if (radioLabels.length > 0) {
+      if (radioElements.length > 0) {
         // 選択肢をクリック
-        for (const label of radioLabels) {
-          const labelText = await label.evaluate((el) => el.textContent || '');
+        for (const radio of radioElements) {
+          // Get the label text using evaluate
+          const labelText = await radio.evaluate((el: Element) => {
+            const parent = el.closest('.nWQGrd');
+            const labelEl = parent ? parent.querySelector('.aDTYNe') : null;
+            return labelEl ? labelEl.textContent?.trim() || '' : '';
+          });
 
-          if (labelText.trim() === answer.answer.trim()) {
-            // ラベルではなく、その親の div をクリック
-            await label.evaluate((el) => {
-              const root = el.closest('.freebirdFormviewerComponentsQuestionRadioRoot');
-              if (root instanceof HTMLElement) {
-                root.click();
-              }
-            });
+          if (labelText === answer.answer.trim()) {
+            // Click the radio button
+            await radio.click();
             break;
           }
         }
       }
 
       // Checkbox の場合
-      const checkboxLabels = await itemContainer.$$(
-        '.freebirdFormviewerComponentsQuestionCheckboxLabel'
-      );
+      const checkboxElements = await itemContainer.$$('[role="checkbox"]');
 
-      if (checkboxLabels.length > 0) {
-        for (const label of checkboxLabels) {
-          const labelText = await label.evaluate((el) => el.textContent || '');
+      if (checkboxElements.length > 0) {
+        for (const checkbox of checkboxElements) {
+          // Get the label text using evaluate
+          const labelText = await checkbox.evaluate((el: Element) => {
+            const parent = el.closest('.nWQGrd');
+            const labelEl = parent ? parent.querySelector('.aDTYNe') : null;
+            return labelEl ? labelEl.textContent?.trim() || '' : '';
+          });
 
-          if (labelText.trim() === answer.answer.trim()) {
-            await label.evaluate((el) => {
-              const root = el.closest('.freebirdFormviewerComponentsQuestionCheckboxRoot');
-              if (root instanceof HTMLElement) {
-                root.click();
-              }
-            });
+          if (labelText === answer.answer.trim()) {
+            // Click the checkbox
+            await checkbox.click();
             break;
           }
         }
