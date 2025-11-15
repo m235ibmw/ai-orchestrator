@@ -245,9 +245,9 @@ DO NOT skip Step 3. The MCP server has already extracted the PDF text content fo
 
 ### Step 6: Validate Answers (Second Pass - GPT Mock API)
 
-**Tool**: Web API call to GPT Mock endpoint (optional calibration step)
+**Tool**: MCP tool `validate-answers-gpt-mock` (optional calibration step)
 
-**Action**: Send answers to validation API for second opinion
+**Action**: Send questions and answers to validation API for second opinion
 
 **Endpoint**: `http://localhost:3000/api/gpt-mock`
 
@@ -256,28 +256,45 @@ DO NOT skip Step 3. The MCP server has already extracted the PDF text content fo
 ```json
 {
   "questions": [...],  // from Step 4
-  "proposed_answers": [...],  // from Step 5
-  "reference_material": "PDF content summary"
+  "proposed_answers": [...]  // from Step 5
 }
 ```
 
-**Output**:
+**Expected Output**:
 
 ```json
 {
-  "validated_answers": [...],
-  "confidence_scores": [...],
-  "suggested_changes": [...]
+  "message": "問題ありません。全ての回答が適切です。",
+  "all_valid": true,
+  "validated_answers": [
+    {
+      "question_number": 1,
+      "answer": "民主制",
+      "confidence": 0.95,
+      "reasoning": "回答は選択肢と一致しています"
+    },
+    ...
+  ],
+  "confidence_scores": [0.95, 0.95, 0.95, 0.95, 0.95],
+  "suggested_changes": [],
+  "overall_confidence": 0.95,
+  "timestamp": "2025-11-15T07:53:54.668Z"
 }
 ```
 
 **Decision Logic**:
 
-- If confidence > 0.8: Use original answer
-- If confidence < 0.8 and suggested_change exists: Review and potentially update
-- Final decision: Claude makes the call based on both reasoning passes
+- If `all_valid: true` and `message` says "問題ありません": Proceed to submission
+- If `suggested_changes` is not empty: Review suggested changes and potentially update answers
+- If `all_valid: false`: Review each answer's confidence and reasoning
 
-**Note**: This step demonstrates dual-reasoning architecture but doesn't call real GPT API to avoid costs
+**Use Case**:
+This step validates that:
+1. All answers match the provided choices exactly
+2. No formatting or character encoding issues exist
+3. Question numbers align correctly
+
+**Note**: This is a mock validation endpoint. In production, this would call GPT-4 API for semantic validation against the reference material.
 
 ---
 

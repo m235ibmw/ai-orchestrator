@@ -69,33 +69,6 @@ server.registerTool(
   },
 );
 
-// GitHub fetch - currently disabled, using local file read instead
-// server.registerTool(
-//   'get-file-from-github',
-//   {
-//     description:
-//       'Download a specific file from GitHub main branch (m235ibmw/ai-orchestrator). Returns the file content as text. Use this to fetch protocol.md or other workflow files without polluting context.',
-//     inputSchema: {
-//       file_path: z
-//         .string()
-//         .describe(
-//           'Repository-relative file path (e.g., "workflows/university/sekaishigairon/protocol.md")',
-//         ),
-//       branch: z
-//         .string()
-//         .optional()
-//         .describe('Git branch name (default: "main")'),
-//     },
-//   },
-//   async (params: any) => {
-//     const { getFileFromGitHub } = await import('./tools/github/getFileFromGitHub.js');
-//     const result = await getFileFromGitHub(params.file_path, params.branch);
-//     return {
-//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-//     };
-//   },
-// );
-
 server.registerTool(
   'get-protocol',
   {
@@ -279,6 +252,106 @@ server.registerTool(
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
+  },
+);
+
+server.registerTool(
+  'validate-answers-gpt-mock',
+  {
+    description:
+      'Validate quiz answers using GPT Mock API. Sends questions, proposed answers, and reference material to validation endpoint. Returns confidence scores and suggested changes.',
+    inputSchema: {
+      questions: z
+        .array(
+          z.object({
+            question_number: z.number(),
+            question_text: z.string(),
+            choices: z.array(z.string()),
+            question_type: z.enum(['multiple_choice', 'checkbox', 'text']),
+          }),
+        )
+        .describe('Questions from the form'),
+      proposed_answers: z
+        .array(
+          z.object({
+            question_number: z.number(),
+            answer: z.string(),
+          }),
+        )
+        .describe('Proposed answers to validate'),
+      reference_material: z
+        .string()
+        .describe('Reference material (PDF text content) for validation'),
+      api_url: z
+        .string()
+        .optional()
+        .describe(
+          'GPT Mock API URL (default: http://localhost:3000/api/gpt-mock)',
+        ),
+    },
+  },
+  async (params: any) => {
+    const apiUrl = params.api_url || 'http://localhost:3000/api/gpt-mock';
+
+    try {
+      const fetchModule = await import('node-fetch');
+      const fetch = fetchModule.default;
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          questions: params.questions,
+          proposed_answers: params.proposed_answers,
+          reference_material: params.reference_material,
+        }),
+      });
+
+      if (!response.ok) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: false,
+                error: `HTTP ${response.status}: ${response.statusText}`,
+              }),
+            },
+          ],
+        };
+      }
+
+      const result: any = await response.json();
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: true,
+                ...result,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              success: false,
+              error: `Failed to validate answers: ${error instanceof Error ? error.message : String(error)}`,
+            }),
+          },
+        ],
+      };
+    }
   },
 );
 
