@@ -212,8 +212,14 @@
       ]
     }
   ],
-  "credentials": {
-    "username": "student",
-    "password": "password123"
-  }
+  "credentials": [
+    {
+      "username": "student",
+      "password": "password123"
+    },
+    {
+      "username": "tanapiyo",
+      "password": "tanaka0520"
+    }
+  ]
 }

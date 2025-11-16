@@ -5,7 +5,11 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { username, password } = body;
 
-  if (username === credentials.username && password === credentials.password) {
+  const isValidUser = credentials.some(
+    (cred) => cred.username === username && cred.password === password
+  );
+
+  if (isValidUser) {
     const response = NextResponse.json({ success: true });
     response.cookies.set('authenticated', 'true', {
       httpOnly: true,

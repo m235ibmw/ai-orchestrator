@@ -16,12 +16,14 @@ export interface Course {
   lessons: Lesson[];
 }
 
+export interface Credential {
+  username: string;
+  password: string;
+}
+
 export interface CoursesData {
   courses: Course[];
-  credentials: {
-    username: string;
-    password: string;
-  };
+  credentials: Credential[];
 }
 
 export const courses: Course[] = coursesData.courses;

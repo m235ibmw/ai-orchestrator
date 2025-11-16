@@ -24,7 +24,7 @@
 
 ---
 
-## 🎨 UI PRESENTATION RULES（UI表示ルール）
+## 🎨 UI PRESENTATION RULES（UI 表示ルール）
 
 **Claude Desktop は以下のフォーマットを厳守してユーザーに表示すること：**
 
@@ -32,21 +32,23 @@
 2. **罫線を削除しない** - `◤` `──────────────────────────────────` などの装飾は必ず保持する
 3. **インデントを保持する** - スペースによるインデント構造を崩さない
 4. **フォーマットを簡略化しない** - "見やすく"するために勝手に改変しない
-5. **STEP表示を統一する** - 必ず `◤ STEP X  タイトル` の形式を使う
-6. **エンジニア感を出す** - ターミナル風の洗練されたUIを維持する
-7. **Usage Exampleの通りに表示する** - protocol.mdのUsage Exampleセクションの形式を正確に再現する
+5. **STEP 表示を統一する** - 必ず `◤ STEP X  タイトル` の形式を使う
+6. **エンジニア感を出す** - ターミナル風の洗練された UI を維持する
+7. **Usage Example の通りに表示する** - protocol.md の Usage Example セクションの形式を正確に再現する
 
-**重要**: このプロトコルのUIは、ユーザーがワークフローの進行状況を視覚的に把握するために設計されています。フォーマットを変更すると、ユーザーエクスペリエンスが著しく低下します。
+**重要**: このプロトコルの UI は、ユーザーがワークフローの進行状況を視覚的に把握するために設計されています。フォーマットを変更すると、ユーザーエクスペリエンスが著しく低下します。
 
 **禁止事項**:
-- ❌ 絵文字を削除して "Step 0.5: 学生特定" のように簡略化する
+
+- ❌ 絵文字を削除して "Step 1: 学生特定" のように簡略化する
 - ❌ 罫線を削除して平文にする
 - ❌ "見やすく"するために箇条書きに変換する
 - ❌ インデントを削除してフラットにする
 
 **正しい例**:
+
 ```
-◤ STEP 0.5  学生特定プロトコル
+◤ STEP 1  学生特定プロトコル
 ──────────────────────────────────
 🔍 入力された名前: "くりはら"
 
@@ -63,8 +65,9 @@
 ```
 
 **誤った例（これは絶対に避ける）**:
+
 ```
-Step 0.5: 学生特定
+Step 1: 学生特定
 
 入力された名前: "くりはら"
 正規化: "kurihara"
@@ -103,7 +106,7 @@ Google Sheets を検索中...
 
 ## Workflow Steps
 
-### Step 0.5: Identify Student by Name with Flexible Search
+### Step 1: Identify Student by Name with Flexible Search
 
 **Tool**: `gsheets` MCP tool (read-only)
 
@@ -114,12 +117,14 @@ Google Sheets を検索中...
 **Process**:
 
 1. **Check User Input** (accept any format):
+
    - 漢字: "栗原", "栗原裕也"
    - ひらがな: "くり", "くりはら"
    - ローマ字: "kuri", "kurihara", "kurihara yuya"
    - If no name provided, ask: "お名前を教えていただけますか？（例: 栗原 または kurihara）"
 
 2. **Claude Reasoning - Convert to Search Pattern**:
+
    - Automatically convert Japanese to romaji using Claude's language understanding
    - Examples:
      - "栗原" → search for "kurihara"
@@ -129,31 +134,48 @@ Google Sheets を検索中...
    - Use lowercase for matching
 
 3. **Fetch All Credentials from Google Sheets**:
+
    ```
    Tool: gsheets MCP (gsheets_read_range)
    Spreadsheet ID: 1dkiU9nBKAzpYuJGwcIwBWTcnvHlRxu6MzNf9nzxfuNQ
    Range: 認証情報!A:Z
+   ```
 
-   Expected Response Format:
+   **Expected Response Format**:
+   ```json
+   {
+     "values": [
+       ["name", "student_id", "classroom_username", "classroom_password"],
+       ["<student_name_1>", "<student_id_1>", "<username_1>", "<password_1>"],
+       ["<student_name_2>", "<student_id_2>", "<username_2>", "<password_2>"]
+     ]
+   }
+   ```
+
+   **Example Response**:
+   ```json
    {
      "values": [
        ["name", "student_id", "classroom_username", "classroom_password"],
        ["kurihara yuya", "12345A", "student", "password123"],
-       ...
+       ["kurihara takeshi", "12346B", "student", "password123"]
      ]
    }
    ```
 
 4. **Filter Candidates** (Claude performs this):
+
    - Filter rows where `name` column contains the search pattern (case-insensitive, partial match)
    - Example: "kuri" matches "kurihara yuya", "kurihara takeshi", "kurita masaki"
 
 5. **Present Candidates to User**:
+
    - **If 1 match found**: Auto-select and confirm with user
      ```
      「kurihara yuya (12345A)」が見つかりました。この方で進めてよろしいですか？
      ```
    - **If multiple matches**: Present numbered list
+
      ```
      以下の候補が見つかりました:
      1. kurihara yuya (学籍番号: 12345A)
@@ -162,6 +184,7 @@ Google Sheets を検索中...
 
      どちらですか？番号または名前を教えてください。
      ```
+
    - **If no matches**: Ask for retry
      ```
      「くり」では見つかりませんでした。
@@ -173,6 +196,17 @@ Google Sheets を検索中...
    - Process user selection and extract full credentials
 
 **Output** (store for use in subsequent steps):
+
+```json
+{
+  "name": "<student_name>",
+  "student_id": "<student_id>",
+  "classroom_username": "<classroom_username>",
+  "classroom_password": "<classroom_password>"
+}
+```
+
+**Example Output** (for student "kurihara yuya"):
 
 ```json
 {
@@ -189,7 +223,7 @@ Google Sheets を検索中...
 User: "世界史概論お願い。くりはらです。"
 
 Claude:
-◤ STEP 0.5  学生特定プロトコル
+◤ STEP 1  学生特定プロトコル
 ──────────────────────────────────
 🔍 入力された名前: "くりはら"
 
@@ -214,39 +248,13 @@ Claude:
 
 - No matches → Ask for different spelling or full name
 - Multiple matches + ambiguous response → Ask again with clear options
-- Invalid choice number → "1〜3の番号を選択してください"
+- Invalid choice number → "1〜3 の番号を選択してください"
 - gsheets tool not available → Abort and notify user to configure gsheets MCP
 
 **Security Note**:
+
 - `classroom_password` is never displayed to user
 - Only used internally for Step 2 login
-
----
-
-### Step 1: Credentials Retrieved
-
-**Note**: Credentials are already retrieved in Step 0.5 above.
-
-**Stored Data** (from Step 0.5):
-
-```json
-{
-  "name": "kurihara yuya",
-  "student_id": "12345A",
-  "classroom_username": "student",
-  "classroom_password": "password123"
-}
-```
-
-**Action**: Verify all required fields are present before proceeding to Step 2.
-
-**Validation**:
-- ✓ `name` is not empty
-- ✓ `student_id` is not empty
-- ✓ `classroom_username` is not empty
-- ✓ `classroom_password` is not empty
-
-**If any field is missing**: Abort workflow and notify user
 
 ---
 
@@ -254,21 +262,22 @@ Claude:
 
 **Tool**: `ai-orchestrator` > `get-lesson-pdf-url`
 
-**Action**: Login to classroom site using credentials from Step 0.5 and retrieve PDF with text content
+**Action**: Login to classroom site using credentials from Step 1 and retrieve PDF with text content
 
-**CRITICAL**: You MUST call the MCP tool `get-lesson-pdf-url` with credentials from Step 0.5:
+**CRITICAL**: You MUST call the MCP tool `get-lesson-pdf-url` with credentials from Step 1:
 
 ```json
 {
-  "course_name": "世界史概論",
-  "lesson_number": 2,
-  "username": "{{classroom_username from Step 0.5}}",
-  "password": "{{classroom_password from Step 0.5}}",
+  "course_name": "<course_name>",
+  "lesson_number": <lesson_number>,
+  "username": "{{classroom_username from Step 1}}",
+  "password": "{{classroom_password from Step 1}}",
   "base_url": "http://localhost:3000"
 }
 ```
 
-**Example** (using credentials from Step 0.5):
+**Example Request** (for 世界史概論 第2回):
+
 ```json
 {
   "course_name": "世界史概論",
@@ -279,7 +288,19 @@ Claude:
 }
 ```
 
-**Expected Response** (extract `pdf_text` from this):
+**Expected Response Format** (extract `pdf_text` from this):
+
+```json
+{
+  "success": true,
+  "pdf_url": "<pdf_url>",
+  "pdf_text": "<extracted_text_content>",
+  "lesson_title": "<lesson_title>",
+  "course_name": "<course_name>"
+}
+```
+
+**Example Response** (for 世界史概論 第2回):
 
 ```json
 {
@@ -292,31 +313,49 @@ Claude:
 ```
 
 **MANDATORY NEXT ACTION**:
-Immediately after receiving the response, extract the `pdf_text` value and proceed to Step 2.5.
-DO NOT skip Step 2.5. Retrieve lecture notes from Notion before proceeding.
+Immediately after receiving the response, extract the `pdf_text` value and proceed to Step 3.
+DO NOT skip Step 3. Retrieve lecture notes from Notion before proceeding.
 
 ---
 
-### Step 2.5: Retrieve Lecture Notes from Notion
+### Step 3: Retrieve Lecture Notes from Notion
 
 **Tool**: Notion MCP (official remote MCP server)
 
 **Action**: Retrieve lecture notes from Notion database based on lesson number
 
 **Prerequisites**:
+
 - Notion MCP server must be configured in Claude Desktop
-- Database must have a property to filter by lesson number (e.g., "第2回", "Lesson 2", or numeric field)
+- Database must have a property to filter by lesson number (e.g., "第 2 回", "Lesson 2", or numeric field)
 
 **CRITICAL**: Use the Notion MCP tool to search for lecture notes:
 
 1. **Search Notion Database**:
+
    ```
    Tool: notion MCP (search_pages or query_database)
    Query: Filter by lesson_number property matching the current lesson
-   Example: lesson_number == 2 for "第2回"
    ```
 
-2. **Expected Response**:
+   **Example Query** (for 第2回):
+   ```
+   lesson_number == 2
+   ```
+
+2. **Expected Response Format**:
+
+   ```json
+   {
+     "page_id": "<page_id>",
+     "title": "<lesson_title>",
+     "content": "<markdown_content>",
+     "lesson_number": <lesson_number>
+   }
+   ```
+
+   **Example Response** (for 世界史概論 第2回):
+
    ```json
    {
      "page_id": "abc123...",
@@ -331,11 +370,22 @@ DO NOT skip Step 2.5. Retrieve lecture notes from Notion before proceeding.
    - Store as `notion_notes` for use in Step 3
 
 **If Notion retrieval fails**:
+
 - Log the error in execution log
 - Continue workflow without Notion notes
-- Use only `pdf_text` for answering questions in Step 5
+- Use only `pdf_text` for answering questions in Step 6
 
-**Output** (store for Step 3):
+**Output Format** (store for Step 3):
+
+```json
+{
+  "notion_notes": "<markdown_content>",
+  "notion_available": true
+}
+```
+
+**Example Output** (for 世界史概論 第2回):
+
 ```json
 {
   "notion_notes": "# 授業ノート\n\n## 古代ギリシャの政治制度\n...",
@@ -345,13 +395,14 @@ DO NOT skip Step 2.5. Retrieve lecture notes from Notion before proceeding.
 
 ---
 
-### Step 3: Verify and Combine PDF Text and Notion Notes (MANDATORY)
+### Step 4: Verify and Combine PDF Text and Notion Notes (MANDATORY)
 
-**CRITICAL**: You MUST verify that both `pdf_text` (from Step 2) and `notion_notes` (from Step 2.5) contain valid content.
+**CRITICAL**: You MUST verify that both `pdf_text` (from Step 2) and `notion_notes` (from Step 3) contain valid content.
 
 **Input**:
+
 - The `pdf_text` value from Step 2's response
-- The `notion_notes` value from Step 2.5's response (if available)
+- The `notion_notes` value from Step 3's response (if available)
 
 **Action**:
 
@@ -359,7 +410,7 @@ DO NOT skip Step 2.5. Retrieve lecture notes from Notion before proceeding.
 2. Verify you can see meaningful content about Greek and Roman history
 3. Check if `notion_notes` is available and not empty
 4. Combine both sources for comprehensive reference material
-5. Store combined content for use in answering questions in Step 5
+5. Store combined content for use in answering questions in Step 6
 
 **What you should see in pdf_text**:
 
@@ -368,6 +419,7 @@ DO NOT skip Step 2.5. Retrieve lecture notes from Notion before proceeding.
 - Historical dates and key figures
 
 **Why this works**:
+
 - MCP server downloads PDF from the classroom site
 - MCP server uses `pdf-parse` library to extract text from the PDF
 - The extracted text is returned directly in the MCP response
@@ -378,11 +430,11 @@ DO NOT skip Step 2.5. Retrieve lecture notes from Notion before proceeding.
 - Check that the MCP tool returned `success: true`
 - Verify the classroom site is running on localhost:3000
 - Check MCP server logs for PDF parsing errors
-- **DO NOT proceed to Step 4 without valid PDF text**
+- **DO NOT proceed to Step 5 without valid PDF text**
 
 ---
 
-### Step 4: Retrieve Google Form Questions
+### Step 5: Retrieve Google Form Questions
 
 **Tool**: `ai-orchestrator` > `get-google-form-questions`
 
@@ -392,11 +444,37 @@ DO NOT skip Step 2.5. Retrieve lecture notes from Notion before proceeding.
 
 ```json
 {
+  "form_url": "<google_form_url>"
+}
+```
+
+**Example Request** (for 世界史概論 第2回):
+
+```json
+{
   "form_url": "https://docs.google.com/forms/d/e/1FAIpQLSfIZgtHH8FJudeMNlW1oyzmI8LKqHiZD9jkP-UYSeTIGdVtww/viewform"
 }
 ```
 
-**Output**:
+**Expected Response Format**:
+
+```json
+{
+  "success": true,
+  "form_title": "<form_title>",
+  "questions": [
+    {
+      "question_number": 1,
+      "question_text": "<question_text>",
+      "choices": ["<choice1>", "<choice2>", "<choice3>", "<choice4>"],
+      "question_type": "multiple_choice"
+    }
+  ],
+  "form_url": "<google_form_url>"
+}
+```
+
+**Example Response** (for 世界史概論 第2回):
 
 ```json
 {
@@ -422,7 +500,7 @@ DO NOT skip Step 2.5. Retrieve lecture notes from Notion before proceeding.
 
 ---
 
-### Step 5: Generate Answers (First Pass - Claude)
+### Step 6: Generate Answers (First Pass - Claude)
 
 **Tool**: Claude Desktop reasoning (no external tool)
 
@@ -437,6 +515,21 @@ DO NOT skip Step 2.5. Retrieve lecture notes from Notion before proceeding.
    - Ensure answer text EXACTLY matches one of the provided choices
 
 **Output Format**:
+
+```json
+[
+  {
+    "question_number": 1,
+    "answer": "<answer_text>"
+  },
+  {
+    "question_number": 2,
+    "answer": "<answer_text>"
+  }
+]
+```
+
+**Example Output** (for 世界史概論 第2回):
 
 ```json
 [
@@ -460,7 +553,7 @@ DO NOT skip Step 2.5. Retrieve lecture notes from Notion before proceeding.
 
 ---
 
-### Step 6: Validate Answers (Second Pass - GPT Mock API)
+### Step 7: Validate Answers (Second Pass - GPT Mock API)
 
 **Tool**: MCP tool `validate-answers-gpt-mock` (optional calibration step)
 
@@ -468,18 +561,39 @@ DO NOT skip Step 2.5. Retrieve lecture notes from Notion before proceeding.
 
 **Endpoint**: `http://localhost:3000/api/gpt-mock`
 
-**Input** (lightweight - no reference material):
+**Input Format** (lightweight - no reference material):
 
 ```json
 {
-  "questions": [...],  // from Step 4
-  "proposed_answers": [...]  // from Step 5
+  "questions": [...],
+  "proposed_answers": [...]
 }
 ```
 
 **Note**: Do NOT include `reference_material` field. Only send questions and proposed answers to minimize request size.
 
-**Expected Output**:
+**Expected Response Format**:
+
+```json
+{
+  "message": "<validation_message>",
+  "all_valid": true,
+  "validated_answers": [
+    {
+      "question_number": 1,
+      "answer": "<answer_text>",
+      "confidence": 0.95,
+      "reasoning": "<reasoning>"
+    }
+  ],
+  "confidence_scores": [0.95, 0.95, 0.95, 0.95, 0.95],
+  "suggested_changes": [],
+  "overall_confidence": 0.95,
+  "timestamp": "<timestamp>"
+}
+```
+
+**Example Response** (for 世界史概論 第2回):
 
 ```json
 {
@@ -509,6 +623,7 @@ DO NOT skip Step 2.5. Retrieve lecture notes from Notion before proceeding.
 
 **Use Case**:
 This step validates that:
+
 1. All answers match the provided choices exactly
 2. No formatting or character encoding issues exist
 3. Question numbers align correctly
@@ -517,7 +632,7 @@ This step validates that:
 
 ---
 
-### Step 7: Human-in-the-Loop Approval (HITL)
+### Step 8: Human-in-the-Loop Approval (HITL)
 
 **Tool**: User interaction via Claude Desktop chat
 
@@ -526,7 +641,7 @@ This step validates that:
 **Display Format**:
 
 ```
-◤ STEP 7  HUMAN CHECKPOINT
+◤ STEP 8  HUMAN CHECKPOINT
 ──────────────────────────────────
 以下が最終回答案です。
 
@@ -553,12 +668,12 @@ This step validates that:
 
 **User Response**:
 
-- "yes" → Proceed to Step 8
+- "yes" → Proceed to Step 9
 - "no" → User provides corrections, update answers, return to this step
 
 ---
 
-### Step 8: Submit to Google Form
+### Step 9: Submit to Google Form
 
 **Tool**: `ai-orchestrator` > `submit-google-form`
 
@@ -568,9 +683,25 @@ This step validates that:
 
 ```json
 {
+  "form_url": "<google_form_url>",
+  "name": "<student_name>",
+  "student_id": "<student_id>",
+  "answers": [
+    {
+      "question_number": 1,
+      "answer": "<answer_text>"
+    }
+  ]
+}
+```
+
+**Example Request** (for 世界史概論 第2回, student "kurihara yuya"):
+
+```json
+{
   "form_url": "https://docs.google.com/forms/d/e/1FAIpQLSfIZgtHH8FJudeMNlW1oyzmI8LKqHiZD9jkP-UYSeTIGdVtww/viewform",
-  "name": "kurihara yuya",  // from Step 1
-  "student_id": "12345A",  // from Step 1
+  "name": "kurihara yuya",
+  "student_id": "12345A",
   "answers": [
     {
       "question_number": 1,
@@ -581,7 +712,16 @@ This step validates that:
 }
 ```
 
-**Output**:
+**Expected Response Format**:
+
+```json
+{
+  "success": true,
+  "message": "<confirmation_message>"
+}
+```
+
+**Example Response**:
 
 ```json
 {
@@ -636,7 +776,7 @@ This step validates that:
 ```
 承知しました。世界史概論 第2回の課題処理を開始します。
 
-◤ STEP 0.5  学生特定プロトコル
+◤ STEP 1  学生特定プロトコル
 ──────────────────────────────────
 🔍 入力された名前: "くりはら"
 
@@ -676,7 +816,7 @@ This step validates that:
 
 ✓ PDFテキスト抽出完了（1,245文字）
 
-◤ STEP 2.5  Notion 授業ノート取得
+◤ STEP 3  Notion 授業ノート取得
 ──────────────────────────────────
 🔗 Notion API 接続中…
 
@@ -701,7 +841,7 @@ This step validates that:
 
 ✓ 教材として有効と判断（PDF + Notion）
 
-◤ STEP 4  Google Form 読み取り
+◤ STEP 5  Google Form 読み取り
 ──────────────────────────────────
 🔗 フォームURL解析中…
 
@@ -710,7 +850,7 @@ This step validates that:
 
 ✓ 設問データ構築完了
 
-◤ STEP 5  AI推論（一次回答生成）
+◤ STEP 6  AI推論（一次回答生成）
 ──────────────────────────────────
 🧠 教材 × 設問 をマッチング中…
 
@@ -722,7 +862,7 @@ This step validates that:
 
 ✓ 一次回答が完成しました
 
-◤ STEP 6  回答校正フェーズ
+◤ STEP 7  回答校正フェーズ
 ──────────────────────────────────
 📡 GPT Mock API に送信…
 
@@ -732,7 +872,7 @@ This step validates that:
 
 ✓ 校正完了（変更なし）
 
-◤ STEP 7  HUMAN CHECKPOINT
+◤ STEP 8  HUMAN CHECKPOINT
 ──────────────────────────────────
 以下が最終回答案です。
 
@@ -760,7 +900,7 @@ This step validates that:
 **Claude**:
 
 ```
-◤ STEP 8  自動提出フェーズ
+◤ STEP 9  自動提出フェーズ
 ──────────────────────────────────
 📝 Google Form へ入力中…
 📨 送信中…
@@ -785,7 +925,7 @@ This step validates that:
 ```
 承知しました。
 
-◤ STEP 0.5  学生特定プロトコル
+◤ STEP 1  学生特定プロトコル
 ──────────────────────────────────
 ⚠ 名前が未入力です
 
@@ -798,7 +938,7 @@ This step validates that:
 **Claude**:
 
 ```
-◤ STEP 0.5  学生特定プロトコル
+◤ STEP 1  学生特定プロトコル
 ──────────────────────────────────
 🔍 入力された名前: "栗原"
 
@@ -835,7 +975,7 @@ This step validates that:
 
 ### 1.2.0 (2025-11-16)
 
-- **NEW**: Notion lecture notes integration (Step 2.5)
+- **NEW**: Notion lecture notes integration (Step 3)
   - Retrieve lecture notes from Notion database via official MCP
   - Filter by lesson number automatically
   - Combine PDF and Notion content for comprehensive reference
@@ -845,7 +985,7 @@ This step validates that:
 
 ### 1.1.0 (2025-11-15)
 
-- **NEW**: Flexible name search with Claude reasoning (Step 0.5)
+- **NEW**: Flexible name search with Claude reasoning (Step 1)
   - Accept Japanese (Kanji/Hiragana) and Romaji input
   - Automatic romaji conversion by Claude
   - Partial match search with user confirmation
