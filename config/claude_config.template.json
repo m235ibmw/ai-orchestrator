@@ -14,8 +14,8 @@
       "command": "npx",
       "args": ["-y", "mcp-gsheets"],
       "env": {
-        "GOOGLE_PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCYgGyOe8Wrvd55\nnIIzrotokvZFL14UAmpO0WfUuRUpkGqP/fYG3nGy++09ZVsHPl7EWQ5yQhD8Okx4\nl+/WbGAlCzp7BD8E9b2oPPXWfsO4fMexANvHBnt++I60/q0YMifYI9Vo1zkrJ3PL\n3/4HY94CZ/dHL/HHCLkOLOAQ9toszbOKZTPk2A43xVFDgEFgEIYaHeYgnXb3Qb0a\n+Z6AXehjn9hOCd1M6CN8Jc4nUVyA7ULvbMOc1I9yz4zZsp/B2JDqVKMM8NRi299G\nCe1MnzdNv4SxCf3BKt8N6EB9a+Kvo/eAVKxOECV2/NkBqknxjxGrUP+3URIvaIMe\ncP1VK30ZAgMBAAECggEAM8bulJXLcFr/rRSJVFi/tlqnSKgjbfG//FC2yw+n8ru4\nonjcTkq6GcXVL5I5DMWNUWbXM83gjHKSwiL76DZVkl40lc3EQ7/Xi8ZexVu2we2D\ns0ISXImD5oEnmqYZSOzGgGjyLS1dmJxFgYPkcMfkebaoyz+o/CWnBvwPe1MEkk8i\nUS73rismOKqDMYYeEbrOZsTl2XWepI8GGM8cA9oTsnaTHwUQCajrM6Jh1zgbXVWS\nesBXiYXdZTOMPc/Prqlk3+bBDgLpBI4xqHoJWXy3ZOGT7qvoAptDFh3WAXzt7piG\nykIDX5V8znDyDePh/DQMBN4Hik+1BG04ZhRUNFgvvQKBgQDURqe1QmdnuzGMUkvH\nqVGHuJ0i5o/vcq4mp7eJ7WcOMOk53FIwkStC5JGqy7L2/uOskB8M0IyQA4INALu8\n5fOaTD9TKjknTZli0tMGknsRKaOKK7XznC5qMyBBtchihMQby+YetKuTsMEpDRJY\nVc4xQZtzHyqojDFqKSxqbbpBpwKBgQC36dvtXpuhADXMGRP9XlSvXmSmBdB1iInB\nOmXFblHIR0gGcYgCKXNxHOGtUfR+dRs/9xqa5lAKccP2W4ArvQOJqSq8LKBsiLjz\nopuD8DPyZU8cAmELRw+mh38nsDEoeybaDPFe0AVKjA4Boc21Y8TsgXpohZzL3det\nGxaYoDijPwKBgFWLv8xZXWi9VKNzCt0EzDmA2bqV5g2eTrZ/QoUQKkbayTKrKmgu\nKJwFlvqYqp/FaqVBU3ILnYnwD/oDgKUImppk/eQbEPtY12avBaIRaA0rlZ96LBJn\nr4DW57nzczTYwltdWXioYLjdM4rCnNECi1zoTqgfOEbCcKuSujaNz9DjAoGAO0yJ\nH+kQTwItVmiDnH8s2Pqbgzh+tVbX69izdcwTTHtHSuSSUPgig8cnMOYq6hdCOQao\nqmc2SZfS8n0gP3oLSPilkdTlyPjwgYXdlNX/OdnWfxZ5SdSYxD4ODrLttrq2lTn1\nHXf/LMEpxvbvx9uqZAN/f3INU2JtJyCD0aRffqsCgYBIa1QnpGTJYe0PUJcxVR/t\nLk9aUtBDdedAu/eBmdgl8SwyjNE/5ULVdbI1U1sfctGPye1H9IFP86oUUactIoRh\noJOzmtB7yq7qm3MbOl51EYPt1ZFtqhZrB50QiKKa71Cp/YQIhLlJPah0iWhgaYoU\nA83DDCkGPHnBzw9twbbMDQ==\n-----END PRIVATE KEY-----\n",
-        "GOOGLE_CLIENT_EMAIL": "ai-orchestrator-sheets@ai-orchestrator-478312.iam.gserviceaccount.com"
+        "GOOGLE_PRIVATE_KEY": "{{GOOGLE_PRIVATE_KEY}}",
+        "GOOGLE_CLIENT_EMAIL": "{{GOOGLE_CLIENT_EMAIL}}"
       }
     },
     "sequential-thinking": {
