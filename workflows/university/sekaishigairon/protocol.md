@@ -292,22 +292,74 @@ Claude:
 ```
 
 **MANDATORY NEXT ACTION**:
-Immediately after receiving the response, extract the `pdf_text` value and proceed to Step 3.
-DO NOT skip Step 3. The MCP server has already extracted the PDF text content for you.
+Immediately after receiving the response, extract the `pdf_text` value and proceed to Step 2.5.
+DO NOT skip Step 2.5. Retrieve lecture notes from Notion before proceeding.
 
 ---
 
-### Step 3: Verify and Use PDF Text Content (MANDATORY)
+### Step 2.5: Retrieve Lecture Notes from Notion
 
-**CRITICAL**: You MUST verify that the `pdf_text` field from Step 2 contains valid content.
+**Tool**: Notion MCP (official remote MCP server)
 
-**Input**: The `pdf_text` value from Step 2's response
+**Action**: Retrieve lecture notes from Notion database based on lesson number
+
+**Prerequisites**:
+- Notion MCP server must be configured in Claude Desktop
+- Database must have a property to filter by lesson number (e.g., "第2回", "Lesson 2", or numeric field)
+
+**CRITICAL**: Use the Notion MCP tool to search for lecture notes:
+
+1. **Search Notion Database**:
+   ```
+   Tool: notion MCP (search_pages or query_database)
+   Query: Filter by lesson_number property matching the current lesson
+   Example: lesson_number == 2 for "第2回"
+   ```
+
+2. **Expected Response**:
+   ```json
+   {
+     "page_id": "abc123...",
+     "title": "第2回: ギリシャ・ローマ時代",
+     "content": "# 授業ノート\n\n## 古代ギリシャの政治制度\n...",
+     "lesson_number": 2
+   }
+   ```
+
+3. **Extract Content**:
+   - Extract the full page content (markdown format)
+   - Store as `notion_notes` for use in Step 3
+
+**If Notion retrieval fails**:
+- Log the error in execution log
+- Continue workflow without Notion notes
+- Use only `pdf_text` for answering questions in Step 5
+
+**Output** (store for Step 3):
+```json
+{
+  "notion_notes": "# 授業ノート\n\n## 古代ギリシャの政治制度\n...",
+  "notion_available": true
+}
+```
+
+---
+
+### Step 3: Verify and Combine PDF Text and Notion Notes (MANDATORY)
+
+**CRITICAL**: You MUST verify that both `pdf_text` (from Step 2) and `notion_notes` (from Step 2.5) contain valid content.
+
+**Input**:
+- The `pdf_text` value from Step 2's response
+- The `notion_notes` value from Step 2.5's response (if available)
 
 **Action**:
 
 1. Check that `pdf_text` is not empty or null
 2. Verify you can see meaningful content about Greek and Roman history
-3. Store this text for use in answering questions in Step 5
+3. Check if `notion_notes` is available and not empty
+4. Combine both sources for comprehensive reference material
+5. Store combined content for use in answering questions in Step 5
 
 **What you should see in pdf_text**:
 
@@ -624,15 +676,30 @@ This step validates that:
 
 ✓ PDFテキスト抽出完了（1,245文字）
 
+◤ STEP 2.5  Notion 授業ノート取得
+──────────────────────────────────
+🔗 Notion API 接続中…
+
+🔍 検索条件: lesson_number == 2
+📚 データベースクエリ実行中…
+
+✓ ページ検出: "第2回: ギリシャ・ローマ時代"
+📝 ノート取得完了（850文字）
+
 ◤ STEP 3  教材解析フェーズ
 ──────────────────────────────────
 🧪 内容検証中…
 
+[PDF教材]
 - ギリシャ民主制 → 検出
 - ローマ共和制 → 検出
 - パックス・ロマーナ → 検出
 
-✓ 教材として有効と判断
+[Notionノート]
+- 授業メモ → 検出
+- 重要ポイント → 検出
+
+✓ 教材として有効と判断（PDF + Notion）
 
 ◤ STEP 4  Google Form 読み取り
 ──────────────────────────────────
@@ -765,6 +832,16 @@ This step validates that:
 - MCP server must be running before starting workflow
 
 ## Version History
+
+### 1.2.0 (2025-11-16)
+
+- **NEW**: Notion lecture notes integration (Step 2.5)
+  - Retrieve lecture notes from Notion database via official MCP
+  - Filter by lesson number automatically
+  - Combine PDF and Notion content for comprehensive reference
+  - Graceful fallback if Notion unavailable
+- Updated execution log to show Notion retrieval step
+- Updated Step 3 to verify and combine both PDF and Notion content
 
 ### 1.1.0 (2025-11-15)
 
