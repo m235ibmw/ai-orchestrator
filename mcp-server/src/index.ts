@@ -1,12 +1,16 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { execSync } from 'child_process';
 import { getWorkflowList } from './tools/github/getWorkflowList.js';
 import { getLessonPdfUrl } from './tools/browser.js';
 import {
   getGoogleFormQuestions,
   submitGoogleForm,
 } from './tools/googleForm.js';
+
+// Clasp GAS runner directory
+const CLASP_RUNNER_DIR = `${process.env.HOME}/clasp-gas-runner`;
 
 // --------------------------
 // SIMPLE DEBUG MODE
@@ -55,88 +59,88 @@ server.registerTool(
   }),
 );
 
-server.registerTool(
-  'get-workflow-list',
-  {
-    description:
-      'Retrieve workflow protocol files (workflows/**/protocol.md) from GitHub repo.',
-  },
-  async () => {
-    const list = await getWorkflowList();
-    return {
-      content: [{ type: 'text', text: JSON.stringify(list, null, 2) }],
-    };
-  },
-);
+// server.registerTool(
+//   'get-workflow-list',
+//   {
+//     description:
+//       'Retrieve workflow protocol files (workflows/**/protocol.md) from GitHub repo.',
+//   },
+//   async () => {
+//     const list = await getWorkflowList();
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(list, null, 2) }],
+//     };
+//   },
+// );
 
-server.registerTool(
-  'get-protocol',
-  {
-    description:
-      'Get the workflow protocol for 世界史概論 (sekaishigairon) from local file. Returns the complete protocol markdown content with all workflow steps, credentials, and form URLs.',
-    inputSchema: {
-      workflow_name: z
-        .string()
-        .optional()
-        .describe('Workflow name (default: "sekaishigairon")'),
-    },
-  },
-  async (params: any) => {
-    const workflowName = params.workflow_name || 'sekaishigairon';
-    const fs = await import('fs/promises');
-    const path = await import('path');
+// server.registerTool(
+//   'get-protocol',
+//   {
+//     description:
+//       'Get the workflow protocol for 世界史概論 (sekaishigairon) from local file. Returns the complete protocol markdown content with all workflow steps, credentials, and form URLs.',
+//     inputSchema: {
+//       workflow_name: z
+//         .string()
+//         .optional()
+//         .describe('Workflow name (default: "sekaishigairon")'),
+//     },
+//   },
+//   async (params: any) => {
+//     const workflowName = params.workflow_name || 'sekaishigairon';
+//     const fs = await import('fs/promises');
+//     const path = await import('path');
 
-    // Hardcode the project root path to ensure it works from Claude Desktop
-    // The MCP server is configured to run from /Users/kurikinton/Documents/niko-dev/ai-orchestrator/mcp-server
-    const projectRoot = '/Users/kurikinton/Documents/niko-dev/ai-orchestrator';
-    const protocolPath = path.join(
-      projectRoot,
-      'workflows',
-      'university',
-      workflowName,
-      'protocol.md',
-    );
+//     // Hardcode the project root path to ensure it works from Claude Desktop
+//     // The MCP server is configured to run from /Users/kurikinton/Documents/niko-dev/ai-orchestrator/mcp-server
+//     const projectRoot = '/Users/kurikinton/Documents/niko-dev/ai-orchestrator';
+//     const protocolPath = path.join(
+//       projectRoot,
+//       'workflows',
+//       'university',
+//       workflowName,
+//       'protocol.md',
+//     );
 
-    try {
-      const content = await fs.readFile(protocolPath, 'utf-8');
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                success: true,
-                workflow: workflowName,
-                protocol_path: protocolPath,
-                content: content,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                success: false,
-                workflow: workflowName,
-                error: `Failed to read protocol file: ${error instanceof Error ? error.message : String(error)}`,
-                attempted_path: protocolPath,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    }
-  },
-);
+//     try {
+//       const content = await fs.readFile(protocolPath, 'utf-8');
+//       return {
+//         content: [
+//           {
+//             type: 'text',
+//             text: JSON.stringify(
+//               {
+//                 success: true,
+//                 workflow: workflowName,
+//                 protocol_path: protocolPath,
+//                 content: content,
+//               },
+//               null,
+//               2,
+//             ),
+//           },
+//         ],
+//       };
+//     } catch (error) {
+//       return {
+//         content: [
+//           {
+//             type: 'text',
+//             text: JSON.stringify(
+//               {
+//                 success: false,
+//                 workflow: workflowName,
+//                 error: `Failed to read protocol file: ${error instanceof Error ? error.message : String(error)}`,
+//                 attempted_path: protocolPath,
+//               },
+//               null,
+//               2,
+//             ),
+//           },
+//         ],
+//       };
+//     }
+//   },
+// );
 
 server.registerTool(
   'get-lesson-pdf-url',
@@ -345,6 +349,220 @@ server.registerTool(
               success: false,
               error: `Failed to validate answers: ${error instanceof Error ? error.message : String(error)}`,
             }),
+          },
+        ],
+      };
+    }
+  },
+);
+
+// --------------------------
+// CLASP GAS RUNNER TOOLS
+// --------------------------
+
+server.registerTool(
+  'gas_create_project',
+  {
+    description:
+      'Create a new Google Apps Script project bound to a Google Spreadsheet using clasp. The project will be stored in ~/clasp-gas-runner/ directory.',
+    inputSchema: {
+      title: z.string().describe('Title for the GAS project'),
+      spreadsheetId: z
+        .string()
+        .describe('Google Spreadsheet ID to bind the project to'),
+    },
+  },
+  async (params: { title: string; spreadsheetId: string }) => {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+
+    try {
+      // Ensure the runner directory exists
+      await fs.mkdir(CLASP_RUNNER_DIR, { recursive: true });
+
+      // Check if a project already exists
+      const claspJsonPath = path.join(CLASP_RUNNER_DIR, '.clasp.json');
+      try {
+        await fs.access(claspJsonPath);
+        // Project exists, return info
+        const existingConfig = await fs.readFile(claspJsonPath, 'utf-8');
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  success: true,
+                  message: 'Project already exists in runner directory',
+                  existing_config: JSON.parse(existingConfig),
+                  directory: CLASP_RUNNER_DIR,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      } catch {
+        // No existing project, create new one
+      }
+
+      // Create the GAS project bound to the spreadsheet
+      const createCmd = `clasp create --type sheets --title "${params.title}" --parentId "${params.spreadsheetId}"`;
+      console.error(`[MCP] Running: ${createCmd}`);
+
+      const output = execSync(createCmd, {
+        cwd: CLASP_RUNNER_DIR,
+        encoding: 'utf-8',
+        timeout: 30000,
+      });
+
+      // Read the created .clasp.json to confirm
+      const config = await fs.readFile(claspJsonPath, 'utf-8');
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: true,
+                message: 'GAS project created successfully',
+                output: output.trim(),
+                config: JSON.parse(config),
+                directory: CLASP_RUNNER_DIR,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: false,
+                error: `Failed to create GAS project: ${error instanceof Error ? error.message : String(error)}`,
+                directory: CLASP_RUNNER_DIR,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    }
+  },
+);
+
+server.registerTool(
+  'gas_run',
+  {
+    description:
+      'Write GAS code to file, push to Google, and execute the main() function. The code must contain a main() function that will be executed. Returns the execution result.',
+    inputSchema: {
+      code: z
+        .string()
+        .describe(
+          'Google Apps Script code with a main() function to execute. The main() function should return a value to see in the result.',
+        ),
+    },
+  },
+  async (params: { code: string }) => {
+    const fs = await import('fs/promises');
+    const path = await import('path');
+
+    try {
+      // Check if project exists
+      const claspJsonPath = path.join(CLASP_RUNNER_DIR, '.clasp.json');
+      try {
+        await fs.access(claspJsonPath);
+      } catch {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  success: false,
+                  error:
+                    'No GAS project found. Please run gas_create_project first.',
+                  directory: CLASP_RUNNER_DIR,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }
+
+      // Write the code to Code.js
+      const codeFilePath = path.join(CLASP_RUNNER_DIR, 'Code.js');
+      await fs.writeFile(codeFilePath, params.code, 'utf-8');
+      console.error(`[MCP] Wrote code to ${codeFilePath}`);
+
+      // Push to Google
+      console.error('[MCP] Running: clasp push --force');
+      const pushOutput = execSync('clasp push --force', {
+        cwd: CLASP_RUNNER_DIR,
+        encoding: 'utf-8',
+        timeout: 30000,
+      });
+      console.error(`[MCP] Push output: ${pushOutput}`);
+
+      // Run the main function
+      console.error('[MCP] Running: clasp run main');
+      const runOutput = execSync('clasp run main', {
+        cwd: CLASP_RUNNER_DIR,
+        encoding: 'utf-8',
+        timeout: 60000,
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: true,
+                push_output: pushOutput.trim(),
+                run_output: runOutput.trim(),
+                code_file: codeFilePath,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      // Include stderr if available
+      const stderr =
+        error instanceof Error && 'stderr' in error
+          ? String((error as any).stderr)
+          : '';
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: false,
+                error: `Failed to run GAS code: ${errorMessage}`,
+                stderr: stderr || undefined,
+                directory: CLASP_RUNNER_DIR,
+              },
+              null,
+              2,
+            ),
           },
         ],
       };
