@@ -18,9 +18,14 @@ import {
   moveFile as driveMoveFile,
   deleteFile as driveDeleteFile,
 } from './tools/gdrive.js';
+import { getYoutubeTranscript } from './tools/youtube.js';
 
 // Clasp GAS runner directory
 const CLASP_RUNNER_DIR = `${process.env.HOME}/clasp-gas-runner`;
+
+// GAS Web App URL
+const GAS_WEB_APP_URL =
+  'https://script.google.com/macros/s/AKfycbzW6hGD-q2JrVJuTXmu7PFgg6rW8U_r6O4njjECBvPohBtg3VX3w3d8imxybExavEu2kQ/exec';
 
 // --------------------------
 // SIMPLE DEBUG MODE
@@ -550,6 +555,31 @@ server.registerTool(
 );
 
 // --------------------------
+// YOUTUBE TOOLS
+// --------------------------
+
+server.registerTool(
+  'youtube_transcript',
+  {
+    description:
+      'Download YouTube video transcript/subtitles and save as plain text file. Removes timestamps and deduplicates text. Uses yt-dlp (must be installed).',
+    inputSchema: {
+      url: z.string().describe('YouTube URL (regular or shortened format)'),
+      lang: z
+        .string()
+        .optional()
+        .describe('Subtitle language code (default: "ja")'),
+    },
+  },
+  async (params: any) => {
+    const result = await getYoutubeTranscript(params.url, params.lang);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+// --------------------------
 // CLASP GAS RUNNER TOOLS
 // --------------------------
 
@@ -656,25 +686,32 @@ server.registerTool(
   'gas_run',
   {
     description:
-      'Write GAS code to file, push to Google, and execute the main() function. The code must contain a main() function that will be executed. Returns the execution result.',
+      'Execute Google Apps Script code via Web App. IMPORTANT: Do NOT wrap code in a function - write executable statements directly. Use "return" at the end to return a value. Supports SpreadsheetApp, DocumentApp, DriveApp, etc.',
     inputSchema: {
       code: z
         .string()
         .describe(
-          'Google Apps Script code with a main() function to execute. The main() function should return a value to see in the result.',
+          'Google Apps Script code to execute directly (NOT wrapped in a function). Use "return" to return a value. Example: const doc = DocumentApp.create("My Doc"); return { id: doc.getId(), url: doc.getUrl() };',
         ),
     },
   },
   async (params: { code: string }) => {
-    const fs = await import('fs/promises');
-    const path = await import('path');
-
     try {
-      // Check if project exists
-      const claspJsonPath = path.join(CLASP_RUNNER_DIR, '.clasp.json');
-      try {
-        await fs.access(claspJsonPath);
-      } catch {
+      const fetchModule = await import('node-fetch');
+      const fetch = fetchModule.default;
+
+      // URL encode the code and send via GET
+      const encodedCode = encodeURIComponent(params.code);
+      const url = `${GAS_WEB_APP_URL}?code=${encodedCode}`;
+
+      console.error(`[MCP] Calling GAS Web App with code length: ${params.code.length}`);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        redirect: 'follow',
+      });
+
+      if (!response.ok) {
         return {
           content: [
             {
@@ -682,9 +719,7 @@ server.registerTool(
               text: JSON.stringify(
                 {
                   success: false,
-                  error:
-                    'No GAS project found. Please run gas_create_project first.',
-                  directory: CLASP_RUNNER_DIR,
+                  error: `HTTP ${response.status}: ${response.statusText}`,
                 },
                 null,
                 2,
@@ -694,53 +729,18 @@ server.registerTool(
         };
       }
 
-      // Write the code to Code.js
-      const codeFilePath = path.join(CLASP_RUNNER_DIR, 'Code.js');
-      await fs.writeFile(codeFilePath, params.code, 'utf-8');
-      console.error(`[MCP] Wrote code to ${codeFilePath}`);
-
-      // Push to Google
-      console.error('[MCP] Running: clasp push --force');
-      const pushOutput = execSync('clasp push --force', {
-        cwd: CLASP_RUNNER_DIR,
-        encoding: 'utf-8',
-        timeout: 30000,
-      });
-      console.error(`[MCP] Push output: ${pushOutput}`);
-
-      // Run the main function
-      console.error('[MCP] Running: clasp run main');
-      const runOutput = execSync('clasp run main', {
-        cwd: CLASP_RUNNER_DIR,
-        encoding: 'utf-8',
-        timeout: 60000,
-      });
-
+      const result = await response.json();
       return {
         content: [
           {
             type: 'text',
-            text: JSON.stringify(
-              {
-                success: true,
-                push_output: pushOutput.trim(),
-                run_output: runOutput.trim(),
-                code_file: codeFilePath,
-              },
-              null,
-              2,
-            ),
+            text: JSON.stringify(result, null, 2),
           },
         ],
       };
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      // Include stderr if available
-      const stderr =
-        error instanceof Error && 'stderr' in error
-          ? String((error as any).stderr)
-          : '';
 
       return {
         content: [
@@ -750,8 +750,6 @@ server.registerTool(
               {
                 success: false,
                 error: `Failed to run GAS code: ${errorMessage}`,
-                stderr: stderr || undefined,
-                directory: CLASP_RUNNER_DIR,
               },
               null,
               2,
