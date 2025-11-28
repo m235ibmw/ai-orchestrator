@@ -13,6 +13,10 @@ import {
   searchFiles as driveSearchFiles,
   readPdfFile as driveReadPdf,
   readFile as driveReadFile,
+  createFolder as driveCreateFolder,
+  createFoldersBatch as driveCreateFoldersBatch,
+  moveFile as driveMoveFile,
+  deleteFile as driveDeleteFile,
 } from './tools/gdrive.js';
 
 // Clasp GAS runner directory
@@ -450,6 +454,95 @@ server.registerTool(
   },
   async (params: any) => {
     const result = await driveReadFile(params.file_id);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+server.registerTool(
+  'drive_create_folder',
+  {
+    description:
+      'Create a new folder in Google Drive. Returns the folder ID, name, and web URL.',
+    inputSchema: {
+      folder_name: z.string().describe('Name of the folder to create'),
+      parent_folder_id: z
+        .string()
+        .optional()
+        .describe('Parent folder ID (optional, defaults to root)'),
+    },
+  },
+  async (params: any) => {
+    const result = await driveCreateFolder(
+      params.folder_name,
+      params.parent_folder_id,
+    );
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+server.registerTool(
+  'drive_create_folders_batch',
+  {
+    description:
+      'Create multiple folders in batch within the same parent folder.',
+    inputSchema: {
+      folder_names: z
+        .array(z.string())
+        .describe('Array of folder names to create'),
+      parent_folder_id: z
+        .string()
+        .optional()
+        .describe('Parent folder ID (optional, defaults to root)'),
+    },
+  },
+  async (params: any) => {
+    const result = await driveCreateFoldersBatch(
+      params.folder_names,
+      params.parent_folder_id,
+    );
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+server.registerTool(
+  'drive_move_file',
+  {
+    description:
+      'Move a file or folder to a different parent folder in Google Drive.',
+    inputSchema: {
+      file_id: z.string().describe('ID of the file or folder to move'),
+      new_parent_id: z.string().describe('ID of the destination folder'),
+    },
+  },
+  async (params: any) => {
+    const result = await driveMoveFile(params.file_id, params.new_parent_id);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+server.registerTool(
+  'drive_delete_file',
+  {
+    description:
+      'Delete a file or folder. By default moves to trash; set permanent=true to permanently delete.',
+    inputSchema: {
+      file_id: z.string().describe('ID of the file or folder to delete'),
+      permanent: z
+        .boolean()
+        .optional()
+        .describe('If true, permanently delete; if false (default), move to trash'),
+    },
+  },
+  async (params: any) => {
+    const result = await driveDeleteFile(params.file_id, params.permanent);
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };

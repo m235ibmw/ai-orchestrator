@@ -11,8 +11,8 @@ const TOKEN_PATH = path.join(CREDS_DIR, 'token.json');
 // Use the same OAuth client as clasp (from ~/.clasprc.json)
 const CLASP_RC_PATH = path.join(process.env.HOME || '', '.clasprc.json');
 
-// Scopes needed for Drive API (readonly)
-const SCOPES = ['https://www.googleapis.com/auth/drive.readonly'];
+// Scopes needed for Drive API (full access for read/write/delete)
+const SCOPES = ['https://www.googleapis.com/auth/drive'];
 
 interface ClaspToken {
   tokens: {
@@ -439,6 +439,188 @@ export async function readFile(fileId: string): Promise<{
     }
 
     return { success: true, fileName, mimeType, content };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Create a folder in Google Drive
+ */
+export async function createFolder(
+  folderName: string,
+  parentFolderId?: string,
+): Promise<{
+  success: boolean;
+  folder?: {
+    id: string;
+    name: string;
+    webViewLink: string;
+  };
+  error?: string;
+}> {
+  try {
+    const drive = await getDriveClient();
+
+    const fileMetadata: {
+      name: string;
+      mimeType: string;
+      parents?: string[];
+    } = {
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+    };
+
+    if (parentFolderId) {
+      fileMetadata.parents = [parentFolderId];
+    }
+
+    const response = await drive.files.create({
+      requestBody: fileMetadata,
+      fields: 'id, name, webViewLink',
+    });
+
+    return {
+      success: true,
+      folder: {
+        id: response.data.id || '',
+        name: response.data.name || '',
+        webViewLink: response.data.webViewLink || '',
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Create multiple folders in batch
+ */
+export async function createFoldersBatch(
+  folderNames: string[],
+  parentFolderId?: string,
+): Promise<{
+  success: boolean;
+  folders?: Array<{
+    id: string;
+    name: string;
+    webViewLink: string;
+  }>;
+  error?: string;
+}> {
+  try {
+    const folders: Array<{ id: string; name: string; webViewLink: string }> = [];
+
+    for (const folderName of folderNames) {
+      const result = await createFolder(folderName, parentFolderId);
+      if (result.success && result.folder) {
+        folders.push(result.folder);
+      } else {
+        return {
+          success: false,
+          error: `Failed to create folder "${folderName}": ${result.error}`,
+          folders, // Return partial results
+        };
+      }
+    }
+
+    return { success: true, folders };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Move a file or folder to a different parent folder
+ */
+export async function moveFile(
+  fileId: string,
+  newParentId: string,
+): Promise<{
+  success: boolean;
+  file?: {
+    id: string;
+    name: string;
+    parents: string[];
+  };
+  error?: string;
+}> {
+  try {
+    const drive = await getDriveClient();
+
+    // First get current parents
+    const currentFile = await drive.files.get({
+      fileId,
+      fields: 'parents',
+    });
+
+    const previousParents = (currentFile.data.parents || []).join(',');
+
+    // Move to new parent
+    const response = await drive.files.update({
+      fileId,
+      addParents: newParentId,
+      removeParents: previousParents,
+      fields: 'id, name, parents',
+    });
+
+    return {
+      success: true,
+      file: {
+        id: response.data.id || '',
+        name: response.data.name || '',
+        parents: response.data.parents || [],
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Delete a file or folder (move to trash or permanently delete)
+ */
+export async function deleteFile(
+  fileId: string,
+  permanent = false,
+): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+}> {
+  try {
+    const drive = await getDriveClient();
+
+    if (permanent) {
+      // Permanently delete
+      await drive.files.delete({ fileId });
+      return {
+        success: true,
+        message: `File ${fileId} permanently deleted`,
+      };
+    } else {
+      // Move to trash
+      await drive.files.update({
+        fileId,
+        requestBody: { trashed: true },
+      });
+      return {
+        success: true,
+        message: `File ${fileId} moved to trash`,
+      };
+    }
   } catch (error) {
     return {
       success: false,
