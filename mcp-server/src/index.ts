@@ -8,6 +8,12 @@ import {
   getGoogleFormQuestions,
   submitGoogleForm,
 } from './tools/googleForm.js';
+import {
+  listFiles as driveListFiles,
+  searchFiles as driveSearchFiles,
+  readPdfFile as driveReadPdf,
+  readFile as driveReadFile,
+} from './tools/gdrive.js';
 
 // Clasp GAS runner directory
 const CLASP_RUNNER_DIR = `${process.env.HOME}/clasp-gas-runner`;
@@ -353,6 +359,100 @@ server.registerTool(
         ],
       };
     }
+  },
+);
+
+// --------------------------
+// CLASP GAS RUNNER TOOLS
+// --------------------------
+
+// --------------------------
+// GOOGLE DRIVE TOOLS
+// --------------------------
+
+server.registerTool(
+  'drive_search',
+  {
+    description:
+      'Search for files in Google Drive by name. Returns file IDs, names, MIME types, and parent folder IDs.',
+    inputSchema: {
+      query: z.string().describe('Search query (file name or partial name)'),
+      page_size: z
+        .number()
+        .optional()
+        .describe('Number of results to return (default: 20)'),
+    },
+  },
+  async (params: any) => {
+    const result = await driveSearchFiles(params.query, params.page_size);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+server.registerTool(
+  'drive_list_files',
+  {
+    description:
+      'List files in a Google Drive folder. Provide folder ID to list contents.',
+    inputSchema: {
+      folder_id: z.string().optional().describe('Folder ID to list files from'),
+      query: z.string().optional().describe('Filter by name (optional)'),
+      mime_type: z
+        .string()
+        .optional()
+        .describe('Filter by MIME type (e.g., "application/pdf")'),
+      page_size: z
+        .number()
+        .optional()
+        .describe('Number of results to return (default: 20)'),
+    },
+  },
+  async (params: any) => {
+    const result = await driveListFiles({
+      folderId: params.folder_id,
+      query: params.query,
+      mimeType: params.mime_type,
+      pageSize: params.page_size,
+    });
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+server.registerTool(
+  'drive_read_pdf',
+  {
+    description:
+      'Read and extract text content from a PDF file in Google Drive. Provide the file ID.',
+    inputSchema: {
+      file_id: z.string().describe('Google Drive file ID of the PDF'),
+    },
+  },
+  async (params: any) => {
+    const result = await driveReadPdf(params.file_id);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+server.registerTool(
+  'drive_read_file',
+  {
+    description:
+      'Read content from a file in Google Drive. Supports PDF (text extraction), Google Docs (as plain text), Google Sheets (as CSV), and other text files.',
+    inputSchema: {
+      file_id: z.string().describe('Google Drive file ID'),
+    },
+  },
+  async (params: any) => {
+    const result = await driveReadFile(params.file_id);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
   },
 );
 

@@ -28,7 +28,21 @@ export function configSync() {
   }
 
   let content = fs.readFileSync(templatePath, "utf-8");
-  content = content.replace(/{{PROJECT_ROOT}}/g, process.env.PROJECT_ROOT);
+
+  // Replace all {{ENV_VAR}} patterns with corresponding environment variables
+  content = content.replace(/\{\{(\w+)\}\}/g, (match, varName) => {
+    const value = process.env[varName];
+    if (!value) {
+      console.warn(`⚠️  Warning: ${varName} is not set in environment`);
+      return match; // Keep placeholder if not found
+    }
+    // Escape newlines and other special chars for JSON string values
+    return value
+      .replace(/\\/g, "\\\\")
+      .replace(/\n/g, "\\n")
+      .replace(/\r/g, "\\r")
+      .replace(/\t/g, "\\t");
+  });
 
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
   fs.writeFileSync(targetPath, content, "utf-8");

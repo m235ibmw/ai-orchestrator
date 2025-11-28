@@ -21,6 +21,13 @@
     "sequential-thinking": {
       "command": "npx",
       "args": ["-y", "@zengwenliang/mcp-server-sequential-thinking"]
+    },
+    "notionApi": {
+      "command": "npx",
+      "args": ["-y", "@notionhq/notion-mcp-server"],
+      "env": {
+        "NOTION_TOKEN": "{{NOTION_API_KEY}}"
+      }
     }
   }
 }

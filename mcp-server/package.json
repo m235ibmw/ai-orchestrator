@@ -31,8 +31,10 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.21.1",
+    "googleapis": "^166.0.0",
     "node-fetch": "^3.3.2",
-    "pdf-parse": "^2.4.5",
+    "open": "^11.0.0",
+    "pdf.js-extract": "^0.2.1",
     "puppeteer": "^24.30.0"
   }
 }

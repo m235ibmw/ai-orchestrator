@@ -2,7 +2,6 @@ import puppeteer, { Browser, Page } from 'puppeteer';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { PDFParse } from 'pdf-parse';
 
 interface LoginCredentials {
   username: string;
@@ -168,10 +167,15 @@ export async function getLessonPdfUrl(
     // 8. PDFからテキストを抽出
     let pdfText = '';
     try {
-      // Parse PDF using file path
-      const parser = new PDFParse({ url: 'file://' + pdfFilePath });
-      const result = await parser.getText();
-      pdfText = result.text;
+      // Parse PDF using pdf.js-extract (ESM compatible)
+      const { PDFExtract } = await import('pdf.js-extract');
+      const pdfExtract = new PDFExtract();
+      const pdfData = await pdfExtract.extractBuffer(buffer);
+
+      // Combine all text from all pages
+      pdfText = pdfData.pages
+        .map((page) => page.content.map((item) => item.str).join(' '))
+        .join('\n\n');
 
       console.error('[MCP] PDF parsing succeeded, extracted', pdfText.length, 'characters');
     } catch (parseError) {
