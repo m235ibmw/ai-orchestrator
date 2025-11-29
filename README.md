@@ -375,25 +375,9 @@ clasp login
 
 ### 4. GAS Web App 設定
 
-`gas_run` ツールを使用するには、以下のGASコードをデプロイしてください：
+`gas_run` / `gas_call_function` ツールを使用するには、GAS Web Appが必要です。
 
-```javascript
-function doGet(e) {
-  const code = e.parameter.code;
-  try {
-    const result = eval(`(function() { ${code} })()`);
-    return ContentService.createTextOutput(JSON.stringify({
-      success: true,
-      result: result
-    })).setMimeType(ContentService.MimeType.JSON);
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({
-      success: false,
-      error: error.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
-```
+**GASプロジェクト:** [https://script.google.com/home/projects/1u3yvkpM5xy51NL_NZpC58aTfTrUXbm1P__8XgMSJTnor6nxn91_Yql32/edit](https://script.google.com/home/projects/1u3yvkpM5xy51NL_NZpC58aTfTrUXbm1P__8XgMSJTnor6nxn91_Yql32/edit)
 
 デプロイ後、Web App URLを `index.ts` の `GAS_WEB_APP_URL` に設定します。
 

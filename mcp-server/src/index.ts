@@ -761,6 +761,85 @@ server.registerTool(
   },
 );
 
+server.registerTool(
+  'gas_call_function',
+  {
+    description:
+      'Call a predefined GAS function by name. Use this for operations that fail with gas_run (like DataValidation). Available functions: setDropdownValidation(spreadsheetId, sheetName, range, values), query(spreadsheetId, project[], type[]) - get metadata without Content column, getContent(spreadsheetId, ids[]) - get Content by IDs, addRow(spreadsheetId, project, type, title, content, killerCase) - add new row with auto ID/Date',
+    inputSchema: {
+      fn: z.string().describe('Function name to call (e.g., "setDropdownValidation")'),
+      args: z
+        .array(z.any())
+        .describe(
+          'Arguments to pass to the function as an array. Example for setDropdownValidation: ["spreadsheetId", "sheetName", "B2:B1000", ["option1", "option2"]]',
+        ),
+    },
+  },
+  async (params: { fn: string; args: unknown[] }) => {
+    try {
+      const fetchModule = await import('node-fetch');
+      const fetch = fetchModule.default;
+
+      const encodedArgs = encodeURIComponent(JSON.stringify(params.args));
+      const url = `${GAS_WEB_APP_URL}?fn=${params.fn}&args=${encodedArgs}`;
+
+      console.error(`[MCP] Calling GAS function: ${params.fn}`);
+
+      const response = await fetch(url, {
+        method: 'GET',
+        redirect: 'follow',
+      });
+
+      if (!response.ok) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(
+                {
+                  success: false,
+                  error: `HTTP ${response.status}: ${response.statusText}`,
+                },
+                null,
+                2,
+              ),
+            },
+          ],
+        };
+      }
+
+      const result = await response.json();
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                success: false,
+                error: `Failed to call GAS function: ${errorMessage}`,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    }
+  },
+);
+
 async function main() {
   console.error('MCP server started (debug log)');
   const transport = new StdioServerTransport();
