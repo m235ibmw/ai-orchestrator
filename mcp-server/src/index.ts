@@ -2,12 +2,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { execSync } from 'child_process';
-import { getWorkflowList } from './tools/github/getWorkflowList.js';
-import { getLessonPdfUrl } from './tools/browser.js';
-import {
-  getGoogleFormQuestions,
-  submitGoogleForm,
-} from './tools/googleForm.js';
+// import { getWorkflowList } from './tools/github/getWorkflowList.js';
+// import { getLessonPdfUrl } from './tools/browser.js';
+// import {
+//   getGoogleFormQuestions,
+//   submitGoogleForm,
+// } from './tools/googleForm.js';
 import {
   listFiles as driveListFiles,
   searchFiles as driveSearchFiles,
@@ -34,7 +34,7 @@ async function debugMode() {
   console.log('=== DEBUG MODE: running manual test ===');
 
   // ★★★ ここに今試したい関数を書くだけ ★★★
-  const result = await getWorkflowList();
+  const result = await driveSearchFiles('test');
 
   console.log('DEBUG RESULT:\n', JSON.stringify(result, null, 2));
   process.exit(0);
@@ -61,18 +61,18 @@ const server = new McpServer(
   },
 );
 
-server.registerTool(
-  'hello',
-  { description: 'Returns おはこんばんわ' },
-  async () => ({
-    content: [
-      {
-        type: 'text',
-        text: 'おはこんばんわ',
-      },
-    ],
-  }),
-);
+// server.registerTool(
+//   'hello',
+//   { description: 'Returns おはこんばんわ' },
+//   async () => ({
+//     content: [
+//       {
+//         type: 'text',
+//         text: 'おはこんばんわ',
+//       },
+//     ],
+//   }),
+// );
 
 // server.registerTool(
 //   'get-workflow-list',
@@ -157,219 +157,219 @@ server.registerTool(
 //   },
 // );
 
-server.registerTool(
-  'get-lesson-pdf-url',
-  {
-    description:
-      'Get PDF content for a specific course lesson by navigating the classroom website using Puppeteer. Downloads the PDF, extracts text using pdf-parse library, and returns both the localhost URL and extracted text content. The pdf_text field contains the full text content of the PDF.',
-    inputSchema: {
-      course_name: z
-        .string()
-        .describe('Name of the course (e.g., "世界史概論", "日本史")'),
-      lesson_number: z.number().describe('Lesson number (e.g., 1, 2, 3)'),
-      username: z.string().describe('Login username for the classroom site'),
-      password: z.string().describe('Login password for the classroom site'),
-      base_url: z
-        .string()
-        .optional()
-        .describe(
-          'Base URL of the classroom site (default: http://localhost:3000)',
-        ),
-    },
-  },
-  async (params: any) => {
-    console.error(
-      '[MCP] get-lesson-pdf-url called with params:',
-      JSON.stringify(params),
-    );
-    const { course_name, lesson_number, username, password, base_url } = params;
+// server.registerTool(
+//   'get-lesson-pdf-url',
+//   {
+//     description:
+//       'Get PDF content for a specific course lesson by navigating the classroom website using Puppeteer. Downloads the PDF, extracts text using pdf-parse library, and returns both the localhost URL and extracted text content. The pdf_text field contains the full text content of the PDF.',
+//     inputSchema: {
+//       course_name: z
+//         .string()
+//         .describe('Name of the course (e.g., "世界史概論", "日本史")'),
+//       lesson_number: z.number().describe('Lesson number (e.g., 1, 2, 3)'),
+//       username: z.string().describe('Login username for the classroom site'),
+//       password: z.string().describe('Login password for the classroom site'),
+//       base_url: z
+//         .string()
+//         .optional()
+//         .describe(
+//           'Base URL of the classroom site (default: http://localhost:3000)',
+//         ),
+//     },
+//   },
+//   async (params: any) => {
+//     console.error(
+//       '[MCP] get-lesson-pdf-url called with params:',
+//       JSON.stringify(params),
+//     );
+//     const { course_name, lesson_number, username, password, base_url } = params;
 
-    if (!course_name || !lesson_number || !username || !password) {
-      console.error('[MCP] Missing required parameters');
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error:
-                'Missing required parameters: course_name, lesson_number, username, password',
-            }),
-          },
-        ],
-      };
-    }
+//     if (!course_name || !lesson_number || !username || !password) {
+//       console.error('[MCP] Missing required parameters');
+//       return {
+//         content: [
+//           {
+//             type: 'text',
+//             text: JSON.stringify({
+//               success: false,
+//               error:
+//                 'Missing required parameters: course_name, lesson_number, username, password',
+//             }),
+//           },
+//         ],
+//       };
+//     }
 
-    console.error('[MCP] Calling getLessonPdfUrl...');
-    const result = await getLessonPdfUrl(
-      course_name,
-      lesson_number,
-      { username, password },
-      base_url,
-    );
+//     console.error('[MCP] Calling getLessonPdfUrl...');
+//     const result = await getLessonPdfUrl(
+//       course_name,
+//       lesson_number,
+//       { username, password },
+//       base_url,
+//     );
 
-    console.error('[MCP] getLessonPdfUrl result:', JSON.stringify(result));
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
-  },
-);
+//     console.error('[MCP] getLessonPdfUrl result:', JSON.stringify(result));
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+//     };
+//   },
+// );
 
-server.registerTool(
-  'get-google-form-questions',
-  {
-    description:
-      'Retrieve questions and choices from a Google Form URL using Puppeteer. Returns all questions with their choices for answering.',
-    inputSchema: {
-      form_url: z
-        .string()
-        .url()
-        .describe(
-          'Google Form URL (e.g., https://docs.google.com/forms/d/e/...)',
-        ),
-    },
-  },
-  async (params: any) => {
-    const result = await getGoogleFormQuestions(params.form_url);
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
-  },
-);
+// server.registerTool(
+//   'get-google-form-questions',
+//   {
+//     description:
+//       'Retrieve questions and choices from a Google Form URL using Puppeteer. Returns all questions with their choices for answering.',
+//     inputSchema: {
+//       form_url: z
+//         .string()
+//         .url()
+//         .describe(
+//           'Google Form URL (e.g., https://docs.google.com/forms/d/e/...)',
+//         ),
+//     },
+//   },
+//   async (params: any) => {
+//     const result = await getGoogleFormQuestions(params.form_url);
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+//     };
+//   },
+// );
 
-server.registerTool(
-  'submit-google-form',
-  {
-    description:
-      'Submit answers to a Google Form using Puppeteer. Provide student info (name, student_id) and question answers.',
-    inputSchema: {
-      form_url: z.string().url().describe('Google Form URL'),
-      name: z.string().describe('Student name (e.g., "kurihara yuya")'),
-      student_id: z.string().describe('Student ID (e.g., "12345A")'),
-      answers: z
-        .array(
-          z.object({
-            question_number: z.number().describe('Question number (1-indexed)'),
-            answer: z
-              .string()
-              .describe('Answer text matching one of the choices'),
-          }),
-        )
-        .describe('Array of answers to submit'),
-    },
-  },
-  async (params: any) => {
-    const studentInfo = {
-      name: params.name,
-      student_id: params.student_id,
-    };
-    const result = await submitGoogleForm(
-      params.form_url,
-      studentInfo,
-      params.answers,
-    );
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
-  },
-);
+// server.registerTool(
+//   'submit-google-form',
+//   {
+//     description:
+//       'Submit answers to a Google Form using Puppeteer. Provide student info (name, student_id) and question answers.',
+//     inputSchema: {
+//       form_url: z.string().url().describe('Google Form URL'),
+//       name: z.string().describe('Student name (e.g., "kurihara yuya")'),
+//       student_id: z.string().describe('Student ID (e.g., "12345A")'),
+//       answers: z
+//         .array(
+//           z.object({
+//             question_number: z.number().describe('Question number (1-indexed)'),
+//             answer: z
+//               .string()
+//               .describe('Answer text matching one of the choices'),
+//           }),
+//         )
+//         .describe('Array of answers to submit'),
+//     },
+//   },
+//   async (params: any) => {
+//     const studentInfo = {
+//       name: params.name,
+//       student_id: params.student_id,
+//     };
+//     const result = await submitGoogleForm(
+//       params.form_url,
+//       studentInfo,
+//       params.answers,
+//     );
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+//     };
+//   },
+// );
 
-server.registerTool(
-  'validate-answers-gpt-mock',
-  {
-    description:
-      'Validate quiz answers using GPT Mock API. Sends questions and proposed answers to validation endpoint. Returns confidence scores and suggested changes. IMPORTANT: Do NOT include reference_material to keep request size small.',
-    inputSchema: {
-      questions: z
-        .array(
-          z.object({
-            question_number: z.number(),
-            question_text: z.string(),
-            choices: z.array(z.string()),
-            question_type: z.enum(['multiple_choice', 'checkbox', 'text']),
-          }),
-        )
-        .describe('Questions from the form'),
-      proposed_answers: z
-        .array(
-          z.object({
-            question_number: z.number(),
-            answer: z.string(),
-          }),
-        )
-        .describe('Proposed answers to validate'),
-      api_url: z
-        .string()
-        .optional()
-        .describe(
-          'GPT Mock API URL (default: http://localhost:3000/api/gpt-mock)',
-        ),
-    },
-  },
-  async (params: any) => {
-    const apiUrl = params.api_url || 'http://localhost:3000/api/gpt-mock';
+// server.registerTool(
+//   'validate-answers-gpt-mock',
+//   {
+//     description:
+//       'Validate quiz answers using GPT Mock API. Sends questions and proposed answers to validation endpoint. Returns confidence scores and suggested changes. IMPORTANT: Do NOT include reference_material to keep request size small.',
+//     inputSchema: {
+//       questions: z
+//         .array(
+//           z.object({
+//             question_number: z.number(),
+//             question_text: z.string(),
+//             choices: z.array(z.string()),
+//             question_type: z.enum(['multiple_choice', 'checkbox', 'text']),
+//           }),
+//         )
+//         .describe('Questions from the form'),
+//       proposed_answers: z
+//         .array(
+//           z.object({
+//             question_number: z.number(),
+//             answer: z.string(),
+//           }),
+//         )
+//         .describe('Proposed answers to validate'),
+//       api_url: z
+//         .string()
+//         .optional()
+//         .describe(
+//           'GPT Mock API URL (default: http://localhost:3000/api/gpt-mock)',
+//         ),
+//     },
+//   },
+//   async (params: any) => {
+//     const apiUrl = params.api_url || 'http://localhost:3000/api/gpt-mock';
 
-    try {
-      const fetchModule = await import('node-fetch');
-      const fetch = fetchModule.default;
+//     try {
+//       const fetchModule = await import('node-fetch');
+//       const fetch = fetchModule.default;
 
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          questions: params.questions,
-          proposed_answers: params.proposed_answers,
-          // reference_material is intentionally omitted to reduce request size
-        }),
-      });
+//       const response = await fetch(apiUrl, {
+//         method: 'POST',
+//         headers: {
+//           'Content-Type': 'application/json',
+//         },
+//         body: JSON.stringify({
+//           questions: params.questions,
+//           proposed_answers: params.proposed_answers,
+//           // reference_material is intentionally omitted to reduce request size
+//         }),
+//       });
 
-      if (!response.ok) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                success: false,
-                error: `HTTP ${response.status}: ${response.statusText}`,
-              }),
-            },
-          ],
-        };
-      }
+//       if (!response.ok) {
+//         return {
+//           content: [
+//             {
+//               type: 'text',
+//               text: JSON.stringify({
+//                 success: false,
+//                 error: `HTTP ${response.status}: ${response.statusText}`,
+//               }),
+//             },
+//           ],
+//         };
+//       }
 
-      const result: any = await response.json();
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                success: true,
-                ...result,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              success: false,
-              error: `Failed to validate answers: ${error instanceof Error ? error.message : String(error)}`,
-            }),
-          },
-        ],
-      };
-    }
-  },
-);
+//       const result: any = await response.json();
+//       return {
+//         content: [
+//           {
+//             type: 'text',
+//             text: JSON.stringify(
+//               {
+//                 success: true,
+//                 ...result,
+//               },
+//               null,
+//               2,
+//             ),
+//           },
+//         ],
+//       };
+//     } catch (error) {
+//       return {
+//         content: [
+//           {
+//             type: 'text',
+//             text: JSON.stringify({
+//               success: false,
+//               error: `Failed to validate answers: ${error instanceof Error ? error.message : String(error)}`,
+//             }),
+//           },
+//         ],
+//       };
+//     }
+//   },
+// );
 
 // --------------------------
 // CLASP GAS RUNNER TOOLS
