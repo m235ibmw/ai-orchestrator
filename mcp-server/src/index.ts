@@ -21,6 +21,13 @@ import {
 } from './tools/gdrive.js';
 import { getYoutubeTranscript } from './tools/youtube.js';
 import { sendNotification } from './tools/notify.js';
+import {
+  submitExpenseForm,
+  getFormOptions,
+  CATEGORIES,
+  PAYMENT_METHODS,
+  type ExpenseEntry,
+} from './tools/expenseForm.js';
 
 // Clasp GAS runner directory
 const CLASP_RUNNER_DIR = `${process.env.HOME}/clasp-gas-runner`;
@@ -632,6 +639,79 @@ server.registerTool(
     const result = await sendNotification(params.title, params.message);
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+// --------------------------
+// EXPENSE FORM TOOLS
+// --------------------------
+
+server.registerTool(
+  'expense_submit',
+  {
+    description: `Submit an expense entry to the household budget Google Form.
+
+【カテゴリ】${CATEGORIES.join(' | ')}
+
+【決済手段】${PAYMENT_METHODS.join(' | ')}
+
+Date formats: YYYY-MM-DD, MM/DD, M月D日, "today"`,
+    inputSchema: {
+      date: z
+        .string()
+        .describe('Date of expense (YYYY-MM-DD, MM/DD, or "today")'),
+      category: z
+        .enum(CATEGORIES)
+        .describe('Category of expense'),
+      item: z
+        .string()
+        .describe('Item description (e.g., "弁当, パン, 水", "荷揚げ1回", "ローン引落")'),
+      amount: z
+        .number()
+        .describe('Total amount in yen (e.g., 750)'),
+      payment_method: z
+        .enum(PAYMENT_METHODS)
+        .describe('Payment method used'),
+      memo: z
+        .string()
+        .optional()
+        .describe('Optional memo (e.g., "コンビニ", "11/26稼働分", "11/30入金予定")'),
+    },
+  },
+  async (params: {
+    date: string;
+    category: (typeof CATEGORIES)[number];
+    item: string;
+    amount: number;
+    payment_method: (typeof PAYMENT_METHODS)[number];
+    memo?: string | undefined;
+  }) => {
+    const entry: ExpenseEntry = {
+      date: params.date,
+      category: params.category,
+      item: params.item,
+      amount: params.amount,
+      paymentMethod: params.payment_method,
+      ...(params.memo !== undefined && { memo: params.memo }),
+    };
+    const result = await submitExpenseForm(entry);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+server.registerTool(
+  'expense_get_options',
+  {
+    description:
+      'Get the list of valid categories and payment methods for the expense form. Use this to show the user available options.',
+  },
+  async () => {
+    const options = getFormOptions();
+    return {
+      content: [{ type: 'text', text: JSON.stringify(options, null, 2) }],
     };
   },
 );

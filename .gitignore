@@ -31,3 +31,7 @@ dist/
 build/
 .cache/
 .out/
+
+# Local MCP/IDE config
+.mcp.json
+.serena/
