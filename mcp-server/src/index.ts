@@ -17,15 +17,17 @@ import {
   createFoldersBatch as driveCreateFoldersBatch,
   moveFile as driveMoveFile,
   deleteFile as driveDeleteFile,
+  createFile as driveCreateFile,
 } from './tools/gdrive.js';
 import { getYoutubeTranscript } from './tools/youtube.js';
+import { sendNotification } from './tools/notify.js';
 
 // Clasp GAS runner directory
 const CLASP_RUNNER_DIR = `${process.env.HOME}/clasp-gas-runner`;
 
 // GAS Web App URL
 const GAS_WEB_APP_URL =
-  'https://script.google.com/macros/s/AKfycbzW6hGD-q2JrVJuTXmu7PFgg6rW8U_r6O4njjECBvPohBtg3VX3w3d8imxybExavEu2kQ/exec';
+  'https://script.google.com/macros/s/AKfycbzOhx_Ycze5QTN8-1h8UGjJUMHflIkTzIgnTKUyWJNCuo61rpE6tutJ9KszPRfDboK0Cg/exec';
 
 // --------------------------
 // SIMPLE DEBUG MODE
@@ -554,6 +556,39 @@ server.registerTool(
   },
 );
 
+server.registerTool(
+  'drive_create_file',
+  {
+    description:
+      'Create a new file in Google Drive. Supports plain text, JSON, CSV, and other text-based files. Can also create Google Docs/Sheets/Slides.',
+    inputSchema: {
+      file_name: z.string().describe('Name of the file to create (e.g., "notes.txt", "data.json")'),
+      content: z.string().describe('Content of the file'),
+      mime_type: z
+        .string()
+        .optional()
+        .describe(
+          'MIME type of the file. Default: "text/plain". Use "application/vnd.google-apps.document" for Google Doc, "application/vnd.google-apps.spreadsheet" for Google Sheet',
+        ),
+      parent_folder_id: z
+        .string()
+        .optional()
+        .describe('ID of the parent folder. If not specified, creates in root'),
+    },
+  },
+  async (params: any) => {
+    const result = await driveCreateFile(
+      params.file_name,
+      params.content,
+      params.mime_type || 'text/plain',
+      params.parent_folder_id,
+    );
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
 // --------------------------
 // YOUTUBE TOOLS
 // --------------------------
@@ -573,6 +608,28 @@ server.registerTool(
   },
   async (params: any) => {
     const result = await getYoutubeTranscript(params.url, params.lang);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+// --------------------------
+// NOTIFICATION TOOLS
+// --------------------------
+
+server.registerTool(
+  'notify',
+  {
+    description:
+      'Send a desktop notification via ntfy.sh. Useful for alerting the user when long-running tasks complete.',
+    inputSchema: {
+      title: z.string().describe('Notification title'),
+      message: z.string().describe('Notification message body'),
+    },
+  },
+  async (params: { title: string; message: string }) => {
+    const result = await sendNotification(params.title, params.message);
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };

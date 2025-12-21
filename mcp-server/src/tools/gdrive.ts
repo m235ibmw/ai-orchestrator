@@ -590,6 +590,81 @@ export async function moveFile(
 }
 
 /**
+ * Create a file in Google Drive
+ */
+export async function createFile(
+  fileName: string,
+  content: string,
+  mimeType: string = 'text/plain',
+  parentFolderId?: string,
+): Promise<{
+  success: boolean;
+  file?: {
+    id: string;
+    name: string;
+    mimeType: string;
+    webViewLink: string;
+  };
+  error?: string;
+}> {
+  try {
+    const drive = await getDriveClient();
+    const { Readable } = await import('stream');
+
+    const fileMetadata: {
+      name: string;
+      mimeType?: string;
+      parents?: string[];
+    } = {
+      name: fileName,
+    };
+
+    // Google Workspace変換用のマッピング
+    const googleMimeTypeMap: Record<string, string> = {
+      'application/vnd.google-apps.document': 'application/vnd.google-apps.document',
+      'application/vnd.google-apps.spreadsheet': 'application/vnd.google-apps.spreadsheet',
+      'application/vnd.google-apps.presentation': 'application/vnd.google-apps.presentation',
+    };
+
+    // Google Workspaceファイルを作成する場合
+    if (googleMimeTypeMap[mimeType]) {
+      fileMetadata.mimeType = mimeType;
+    }
+
+    if (parentFolderId) {
+      fileMetadata.parents = [parentFolderId];
+    }
+
+    // コンテンツをストリームに変換
+    const stream = Readable.from([content]);
+
+    const response = await drive.files.create({
+      requestBody: fileMetadata,
+      media: {
+        mimeType: mimeType.startsWith('application/vnd.google-apps') ? 'text/plain' : mimeType,
+        body: stream,
+      },
+      fields: 'id, name, mimeType, webViewLink',
+    });
+
+    return {
+      success: true,
+      file: {
+        id: response.data.id || '',
+        name: response.data.name || '',
+        mimeType: response.data.mimeType || '',
+        webViewLink: response.data.webViewLink || '',
+      },
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
  * Delete a file or folder (move to trash or permanently delete)
  */
 export async function deleteFile(
