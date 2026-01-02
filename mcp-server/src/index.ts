@@ -28,6 +28,7 @@ import {
   PAYMENT_METHODS,
   type ExpenseEntry,
 } from './tools/expenseForm.js';
+import { getFocusHistory } from './tools/raycastFocus.js';
 
 // Clasp GAS runner directory
 const CLASP_RUNNER_DIR = `${process.env.HOME}/clasp-gas-runner`;
@@ -974,6 +975,33 @@ server.registerTool(
         ],
       };
     }
+  },
+);
+
+// --------------------------
+// RAYCAST FOCUS TOOLS
+// --------------------------
+
+server.registerTool(
+  'raycast_focus_history',
+  {
+    description:
+      'Get Raycast Focus session history. Automatically syncs recent sessions from macOS logs before returning results. Data is persisted in SQLite for long-term storage.',
+    inputSchema: {
+      start_date: z
+        .string()
+        .describe('Start date (YYYY-MM-DD format)'),
+      end_date: z
+        .string()
+        .optional()
+        .describe('End date (YYYY-MM-DD format). If omitted, returns only start_date.'),
+    },
+  },
+  async (params: { start_date: string; end_date?: string | undefined }) => {
+    const result = await getFocusHistory(params.start_date, params.end_date);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
   },
 );
 
