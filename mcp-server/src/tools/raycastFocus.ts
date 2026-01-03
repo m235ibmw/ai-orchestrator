@@ -11,6 +11,17 @@ const DB_PATH = path.join(
   'focus.db',
 );
 
+// Raycast Focus Stats extension DB path
+const FOCUS_STATS_DB_PATH = path.join(
+  process.env.HOME || '~',
+  'Library',
+  'Application Support',
+  'com.raycast.macos',
+  'extensions',
+  'ef4503c9-f6cf-488a-920d-70a54a79b1aa',
+  'sessions.db',
+);
+
 export interface FocusSession {
   type: 'start' | 'complete' | 'stop' | 'summary';
   timestamp: string;
@@ -336,15 +347,19 @@ interface CompleteFocusSession {
 
 function groupSessions(sessions: FocusSession[]): CompleteFocusSession[] {
   const complete: CompleteFocusSession[] = [];
+  const seenStartTimes = new Set<string>();
 
   for (let i = 0; i < sessions.length; i++) {
     const session = sessions[i];
+
+    // Handle start sessions (original logic)
     if (session?.type === 'start') {
       const result: CompleteFocusSession = {
         goal: session.goal,
         plannedDuration: session.plannedDuration,
         startTime: session.timestamp,
       };
+      seenStartTimes.add(session.timestamp);
 
       // Look for corresponding summary
       for (let j = i + 1; j < sessions.length; j++) {
@@ -357,10 +372,34 @@ function groupSessions(sessions: FocusSession[]): CompleteFocusSession[] {
           result.pausesCount = next.pausesCount;
           result.blockEventsCount = next.blockEventsCount;
           result.snoozeEventsCount = next.snoozeEventsCount;
+          if (next.startDate) {
+            seenStartTimes.add(next.startDate);
+          }
           break;
         }
       }
 
+      complete.push(result);
+    }
+
+    // Handle summary sessions without corresponding start (new logic)
+    if (session?.type === 'summary' && session.startDate) {
+      // Skip if we already have this session from a start event
+      if (seenStartTimes.has(session.startDate)) {
+        continue;
+      }
+
+      const result: CompleteFocusSession = {
+        startTime: session.startDate,
+        endTime: session.timestamp,
+        actualDuration: session.actualDuration,
+        source: session.source,
+        pausesCount: session.pausesCount,
+        blockEventsCount: session.blockEventsCount,
+        snoozeEventsCount: session.snoozeEventsCount,
+      };
+
+      seenStartTimes.add(session.startDate);
       complete.push(result);
     }
   }
@@ -383,23 +422,35 @@ export interface StoredFocusSession {
 }
 
 /**
- * Get focus sessions from database for a date range
- * Automatically syncs from macOS logs before querying
+ * Get focus sessions from Raycast Focus Stats extension DB
+ * Falls back to our own DB if Focus Stats is not available
  */
 export async function getFocusHistory(
   startDate: string,
   endDate?: string | undefined,
 ): Promise<StoredFocusSession[]> {
-  // Auto-sync from logs first (silently handles errors)
+  const end = endDate || startDate;
+
+  // Try Focus Stats extension DB first (has goal data)
+  if (fs.existsSync(FOCUS_STATS_DB_PATH)) {
+    try {
+      const sessions = getSessionsFromFocusStats(startDate, end);
+      if (sessions.length > 0) {
+        return sessions;
+      }
+    } catch {
+      // Fall through to our own DB
+    }
+  }
+
+  // Fallback: sync from logs and use our own DB
   try {
     await syncFocusSessions();
   } catch {
-    // Ignore sync errors, just query existing data
+    // Ignore sync errors
   }
 
   const db = getDb();
-
-  const end = endDate || startDate;
   const stmt = db.prepare(`
     SELECT * FROM focus_sessions
     WHERE date(start_time) >= date(?) AND date(start_time) <= date(?)
@@ -410,4 +461,77 @@ export async function getFocusHistory(
   db.close();
 
   return rows;
+}
+
+interface FocusStatsSession {
+  id: number;
+  goal: string;
+  duration: number; // minutes (not seconds!)
+  timestamp: number; // milliseconds unix timestamp
+}
+
+/**
+ * Read sessions from Raycast Focus Stats extension DB
+ */
+function getSessionsFromFocusStats(startDate: string, endDate: string): StoredFocusSession[] {
+  const db = new Database(FOCUS_STATS_DB_PATH, { readonly: true });
+
+  // Convert dates to timestamp range (milliseconds)
+  const startTs = new Date(startDate).setHours(0, 0, 0, 0);
+  const endTs = new Date(endDate).setHours(23, 59, 59, 999);
+
+  const stmt = db.prepare(`
+    SELECT * FROM sessions
+    WHERE timestamp >= ? AND timestamp <= ?
+    ORDER BY timestamp DESC
+  `);
+
+  const rows = stmt.all(startTs, endTs) as FocusStatsSession[];
+  db.close();
+
+  // Convert to StoredFocusSession format
+  return rows.map((row) => {
+    const startTime = new Date(row.timestamp);
+    const durationMinutes = row.duration;
+    const endTime = new Date(row.timestamp + durationMinutes * 60 * 1000);
+
+    return {
+      id: row.timestamp.toString(),
+      goal: row.goal,
+      planned_duration: null,
+      actual_duration: formatDurationMinutes(durationMinutes),
+      start_time: formatJST(startTime),
+      end_time: formatJST(endTime),
+      source: null,
+      pauses_count: 0,
+      block_events_count: 0,
+      snooze_events_count: 0,
+      synced_at: new Date().toISOString(),
+    };
+  });
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds} seconds`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes} minutes`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours} hours ${remainingMinutes} minutes`;
+}
+
+function formatDurationMinutes(minutes: number): string {
+  if (minutes < 60) {
+    return `${minutes} minutes`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (remainingMinutes === 0) {
+    return `${hours} hours`;
+  }
+  return `${hours} hours ${remainingMinutes} minutes`;
 }

@@ -32,6 +32,12 @@ build/
 .cache/
 .out/
 
+# Whisper transcription
+mcp-server/tmp/
+mcp-server/transcripts/
+
 # Local MCP/IDE config
 .mcp.json
 .serena/
+
+task
