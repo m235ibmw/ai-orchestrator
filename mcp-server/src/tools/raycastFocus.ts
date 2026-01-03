@@ -422,8 +422,7 @@ export interface StoredFocusSession {
 }
 
 /**
- * Get focus sessions from Raycast Focus Stats extension DB
- * Falls back to our own DB if Focus Stats is not available
+ * Get focus sessions by merging Focus Stats extension DB and our own DB
  */
 export async function getFocusHistory(
   startDate: string,
@@ -431,36 +430,45 @@ export async function getFocusHistory(
 ): Promise<StoredFocusSession[]> {
   const end = endDate || startDate;
 
-  // Try Focus Stats extension DB first (has goal data)
-  if (fs.existsSync(FOCUS_STATS_DB_PATH)) {
-    try {
-      const sessions = getSessionsFromFocusStats(startDate, end);
-      if (sessions.length > 0) {
-        return sessions;
-      }
-    } catch {
-      // Fall through to our own DB
-    }
-  }
-
-  // Fallback: sync from logs and use our own DB
+  // Sync from logs first
   try {
     await syncFocusSessions();
   } catch {
     // Ignore sync errors
   }
 
+  // Get sessions from our own DB
   const db = getDb();
   const stmt = db.prepare(`
     SELECT * FROM focus_sessions
     WHERE date(start_time) >= date(?) AND date(start_time) <= date(?)
     ORDER BY start_time DESC
   `);
-
-  const rows = stmt.all(startDate, end) as StoredFocusSession[];
+  const ownSessions = stmt.all(startDate, end) as StoredFocusSession[];
   db.close();
 
-  return rows;
+  // Create a Set of start_times from own DB for deduplication
+  const ownStartTimes = new Set(ownSessions.map((s) => s.start_time));
+
+  // Get sessions from Focus Stats extension DB and merge
+  if (fs.existsSync(FOCUS_STATS_DB_PATH)) {
+    try {
+      const statsSessions = getSessionsFromFocusStats(startDate, end);
+      // Add sessions from Focus Stats that are not in our DB
+      for (const session of statsSessions) {
+        if (!ownStartTimes.has(session.start_time)) {
+          ownSessions.push(session);
+        }
+      }
+    } catch {
+      // Ignore Focus Stats errors
+    }
+  }
+
+  // Sort by start_time descending
+  ownSessions.sort((a, b) => b.start_time.localeCompare(a.start_time));
+
+  return ownSessions;
 }
 
 interface FocusStatsSession {
