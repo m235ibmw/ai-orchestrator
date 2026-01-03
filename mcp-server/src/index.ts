@@ -29,6 +29,7 @@ import {
   type ExpenseEntry,
 } from './tools/expenseForm.js';
 import { getFocusHistory } from './tools/raycastFocus.js';
+import { transcribeDriveFolder, transcribeLocalAudio } from './tools/whisper.js';
 
 // Clasp GAS runner directory
 const CLASP_RUNNER_DIR = `${process.env.HOME}/clasp-gas-runner`;
@@ -43,8 +44,10 @@ const GAS_WEB_APP_URL =
 async function debugMode() {
   console.log('=== DEBUG MODE: running manual test ===');
 
-  // ★★★ ここに今試したい関数を書くだけ ★★★
-  const result = await driveSearchFiles('test');
+  // ★★★ 本番テスト: transcribeDriveFolder ★★★
+  const result = await transcribeDriveFolder(
+    'https://drive.google.com/drive/folders/1xEBm1J1ID92_wpcB_uPWBqG2PT8VfXwu'
+  );
 
   console.log('DEBUG RESULT:\n', JSON.stringify(result, null, 2));
   process.exit(0);
@@ -999,6 +1002,52 @@ server.registerTool(
   },
   async (params: { start_date: string; end_date?: string | undefined }) => {
     const result = await getFocusHistory(params.start_date, params.end_date);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+// --------------------------
+// WHISPER TRANSCRIPTION TOOLS
+// --------------------------
+
+server.registerTool(
+  'whisper_transcribe_folder',
+  {
+    description:
+      'Download MP3 files from a Google Drive folder and transcribe them to Japanese text using Whisper. Saves transcripts to mcp-server/transcripts/<folder_name>/',
+    inputSchema: {
+      folder_url: z
+        .string()
+        .describe('Google Drive folder URL containing MP3 files'),
+    },
+  },
+  async (params: { folder_url: string }) => {
+    const result = await transcribeDriveFolder(params.folder_url);
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    };
+  },
+);
+
+server.registerTool(
+  'whisper_transcribe_local',
+  {
+    description:
+      'Transcribe a local audio file (m4a, mp3, wav, etc.) to Japanese text using Whisper (medium model). Output is saved to /Users/kurikinton/Documents/niko-dev/cache-files/',
+    inputSchema: {
+      audio_path: z
+        .string()
+        .describe('Absolute path to the local audio file (e.g., /path/to/file.m4a)'),
+      output_name: z
+        .string()
+        .optional()
+        .describe('Output file name (without .txt extension). If omitted, uses the original audio file name.'),
+    },
+  },
+  async (params: { audio_path: string; output_name?: string | undefined }) => {
+    const result = await transcribeLocalAudio(params.audio_path, params.output_name);
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
