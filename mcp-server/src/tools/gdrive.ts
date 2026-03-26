@@ -6,22 +6,32 @@ import open from 'open';
 
 // Credentials directory
 const CREDS_DIR = path.join(process.env.HOME || '', '.gdrive-mcp');
-const TOKEN_PATH = path.join(CREDS_DIR, 'token.json');
 
-// Use the same OAuth client as clasp (from ~/.clasprc.json)
-const CLASP_RC_PATH = path.join(process.env.HOME || '', '.clasprc.json');
+// Default account ID
+export const DEFAULT_ACCOUNT_ID = 'default';
 
-// Scopes needed for Drive API (full access for read/write/delete)
-const SCOPES = ['https://www.googleapis.com/auth/drive'];
+// Get token path for a specific account
+function getTokenPath(accountId: string = DEFAULT_ACCOUNT_ID): string {
+  if (accountId === DEFAULT_ACCOUNT_ID) {
+    return path.join(CREDS_DIR, 'token.json');
+  }
+  return path.join(CREDS_DIR, `token-${accountId}.json`);
+}
 
-interface ClaspToken {
-  tokens: {
-    default: {
-      client_id: string;
-      client_secret: string;
-      refresh_token: string;
-      access_token: string;
-    };
+// OAuth credentials file path
+const CREDENTIALS_PATH = path.join(CREDS_DIR, 'credentials.json');
+
+// Scopes needed for Drive API and Slides API
+const SCOPES = [
+  'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/presentations.readonly',
+];
+
+interface OAuthCredentials {
+  installed: {
+    client_id: string;
+    client_secret: string;
+    redirect_uris: string[];
   };
 }
 
@@ -33,32 +43,33 @@ interface DriveToken {
   expiry_date: number;
 }
 
-let driveClient: drive_v3.Drive | null = null;
+// Cache drive clients per account
+const driveClients = new Map<string, drive_v3.Drive>();
 
 /**
- * Get OAuth2 client using clasp credentials
+ * Get OAuth2 client using credentials.json
  */
 async function getOAuth2Client() {
-  // Read clasp credentials
-  const claspRcContent = await fs.readFile(CLASP_RC_PATH, 'utf-8');
-  const claspRc: ClaspToken = JSON.parse(claspRcContent);
-  const claspCreds = claspRc.tokens.default;
+  // Read OAuth credentials
+  const credsContent = await fs.readFile(CREDENTIALS_PATH, 'utf-8');
+  const creds: OAuthCredentials = JSON.parse(credsContent);
 
   const oauth2Client = new google.auth.OAuth2(
-    claspCreds.client_id,
-    claspCreds.client_secret,
+    creds.installed.client_id,
+    creds.installed.client_secret,
     'http://localhost:3456/callback',
   );
 
-  return { oauth2Client, claspCreds };
+  return { oauth2Client };
 }
 
 /**
  * Load saved Drive token if exists
  */
-async function loadSavedToken(): Promise<DriveToken | null> {
+async function loadSavedToken(accountId: string = DEFAULT_ACCOUNT_ID): Promise<DriveToken | null> {
   try {
-    const tokenContent = await fs.readFile(TOKEN_PATH, 'utf-8');
+    const tokenPath = getTokenPath(accountId);
+    const tokenContent = await fs.readFile(tokenPath, 'utf-8');
     return JSON.parse(tokenContent);
   } catch {
     return null;
@@ -68,9 +79,10 @@ async function loadSavedToken(): Promise<DriveToken | null> {
 /**
  * Save Drive token
  */
-async function saveToken(token: DriveToken): Promise<void> {
+async function saveToken(token: DriveToken, accountId: string = DEFAULT_ACCOUNT_ID): Promise<void> {
   await fs.mkdir(CREDS_DIR, { recursive: true });
-  await fs.writeFile(TOKEN_PATH, JSON.stringify(token, null, 2));
+  const tokenPath = getTokenPath(accountId);
+  await fs.writeFile(tokenPath, JSON.stringify(token, null, 2));
 }
 
 /**
@@ -82,6 +94,7 @@ async function performOAuthFlow(
       ? any
       : any
     : any,
+  accountId: string = DEFAULT_ACCOUNT_ID,
 ): Promise<DriveToken> {
   return new Promise((resolve, reject) => {
     const authUrl = oauth2Client.generateAuthUrl({
@@ -90,8 +103,8 @@ async function performOAuthFlow(
       prompt: 'consent',
     });
 
-    console.error('[GDrive] Opening browser for authentication...');
-    console.error('[GDrive] Auth URL:', authUrl);
+    console.error(`[GDrive:${accountId}] Opening browser for authentication...`);
+    console.error(`[GDrive:${accountId}] Auth URL:`, authUrl);
 
     // Create a simple HTTP server to receive the callback
     const server = createServer(async (req, res) => {
@@ -112,11 +125,11 @@ async function performOAuthFlow(
               expiry_date: tokens.expiry_date || 0,
             };
 
-            await saveToken(driveToken);
+            await saveToken(driveToken, accountId);
 
             res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(
-              '<html><body><h1>Authentication successful!</h1><p>You can close this window.</p></body></html>',
+              `<html><body><h1>Authentication successful!</h1><p>Account: ${accountId}</p><p>You can close this window.</p></body></html>`,
             );
             server.close();
             resolve(driveToken);
@@ -135,7 +148,7 @@ async function performOAuthFlow(
 
     server.listen(3456, () => {
       open(authUrl).catch(() => {
-        console.error('[GDrive] Could not open browser. Please visit:', authUrl);
+        console.error(`[GDrive:${accountId}] Could not open browser. Please visit:`, authUrl);
       });
     });
 
@@ -148,17 +161,20 @@ async function performOAuthFlow(
 }
 
 /**
- * Get authenticated Drive client
+ * Get authenticated Drive client for a specific account
+ * @param accountId - Account identifier (e.g., 'default', 'work', 'personal')
  */
-export async function getDriveClient(): Promise<drive_v3.Drive> {
-  if (driveClient) {
-    return driveClient;
+export async function getDriveClient(accountId: string = DEFAULT_ACCOUNT_ID): Promise<drive_v3.Drive> {
+  // Check cache
+  const cached = driveClients.get(accountId);
+  if (cached) {
+    return cached;
   }
 
   const { oauth2Client } = await getOAuth2Client();
 
-  // Try to load saved token
-  let token = await loadSavedToken();
+  // Try to load saved token for this account
+  let token = await loadSavedToken(accountId);
 
   if (token) {
     oauth2Client.setCredentials({
@@ -169,7 +185,7 @@ export async function getDriveClient(): Promise<drive_v3.Drive> {
 
     // Check if token needs refresh
     if (token.expiry_date && token.expiry_date < Date.now()) {
-      console.error('[GDrive] Token expired, refreshing...');
+      console.error(`[GDrive:${accountId}] Token expired, refreshing...`);
       const { credentials } = await oauth2Client.refreshAccessToken();
       token = {
         access_token: credentials.access_token || '',
@@ -178,13 +194,13 @@ export async function getDriveClient(): Promise<drive_v3.Drive> {
         token_type: credentials.token_type || 'Bearer',
         expiry_date: credentials.expiry_date || 0,
       };
-      await saveToken(token);
+      await saveToken(token, accountId);
       oauth2Client.setCredentials(credentials);
     }
   } else {
     // Need to perform OAuth flow
-    console.error('[GDrive] No saved token, performing OAuth flow...');
-    token = await performOAuthFlow(oauth2Client);
+    console.error(`[GDrive:${accountId}] No saved token, performing OAuth flow...`);
+    token = await performOAuthFlow(oauth2Client, accountId);
     oauth2Client.setCredentials({
       access_token: token.access_token,
       refresh_token: token.refresh_token,
@@ -192,8 +208,9 @@ export async function getDriveClient(): Promise<drive_v3.Drive> {
     });
   }
 
-  driveClient = google.drive({ version: 'v3', auth: oauth2Client });
-  return driveClient;
+  const client = google.drive({ version: 'v3', auth: oauth2Client });
+  driveClients.set(accountId, client);
+  return client;
 }
 
 /**
@@ -204,6 +221,7 @@ export async function listFiles(options: {
   query?: string;
   pageSize?: number;
   mimeType?: string;
+  accountId?: string;
 }): Promise<{
   success: boolean;
   files?: Array<{
@@ -216,7 +234,7 @@ export async function listFiles(options: {
   error?: string;
 }> {
   try {
-    const drive = await getDriveClient();
+    const drive = await getDriveClient(options.accountId);
 
     let q = '';
     const conditions: string[] = [];
@@ -276,6 +294,7 @@ export async function listFiles(options: {
 export async function searchFiles(
   query: string,
   pageSize = 20,
+  accountId?: string,
 ): Promise<{
   success: boolean;
   files?: Array<{
@@ -288,7 +307,7 @@ export async function searchFiles(
   error?: string;
 }> {
   try {
-    const drive = await getDriveClient();
+    const drive = await getDriveClient(accountId);
 
     const response = await drive.files.list({
       q: `name contains '${query}' and trashed = false`,
@@ -327,14 +346,14 @@ export async function searchFiles(
 /**
  * Read PDF file content from Google Drive
  */
-export async function readPdfFile(fileId: string): Promise<{
+export async function readPdfFile(fileId: string, accountId?: string): Promise<{
   success: boolean;
   fileName?: string;
   content?: string;
   error?: string;
 }> {
   try {
-    const drive = await getDriveClient();
+    const drive = await getDriveClient(accountId);
 
     // Get file metadata
     const fileMetadata = await drive.files.get({
@@ -386,7 +405,7 @@ export async function readPdfFile(fileId: string): Promise<{
 /**
  * Read any file from Google Drive (with format conversion for Google Workspace files)
  */
-export async function readFile(fileId: string): Promise<{
+export async function readFile(fileId: string, accountId?: string): Promise<{
   success: boolean;
   fileName?: string;
   mimeType?: string;
@@ -394,7 +413,7 @@ export async function readFile(fileId: string): Promise<{
   error?: string;
 }> {
   try {
-    const drive = await getDriveClient();
+    const drive = await getDriveClient(accountId);
 
     // Get file metadata
     const fileMetadata = await drive.files.get({
@@ -424,7 +443,7 @@ export async function readFile(fileId: string): Promise<{
       content = response.data as string;
     } else if (mimeType === 'application/pdf') {
       // Handle PDF
-      const result = await readPdfFile(fileId);
+      const result = await readPdfFile(fileId, accountId);
       if (!result.success) {
         return result;
       }
@@ -453,6 +472,7 @@ export async function readFile(fileId: string): Promise<{
 export async function createFolder(
   folderName: string,
   parentFolderId?: string,
+  accountId?: string,
 ): Promise<{
   success: boolean;
   folder?: {
@@ -463,7 +483,7 @@ export async function createFolder(
   error?: string;
 }> {
   try {
-    const drive = await getDriveClient();
+    const drive = await getDriveClient(accountId);
 
     const fileMetadata: {
       name: string;
@@ -505,6 +525,7 @@ export async function createFolder(
 export async function createFoldersBatch(
   folderNames: string[],
   parentFolderId?: string,
+  accountId?: string,
 ): Promise<{
   success: boolean;
   folders?: Array<{
@@ -518,7 +539,7 @@ export async function createFoldersBatch(
     const folders: Array<{ id: string; name: string; webViewLink: string }> = [];
 
     for (const folderName of folderNames) {
-      const result = await createFolder(folderName, parentFolderId);
+      const result = await createFolder(folderName, parentFolderId, accountId);
       if (result.success && result.folder) {
         folders.push(result.folder);
       } else {
@@ -545,6 +566,7 @@ export async function createFoldersBatch(
 export async function moveFile(
   fileId: string,
   newParentId: string,
+  accountId?: string,
 ): Promise<{
   success: boolean;
   file?: {
@@ -555,7 +577,7 @@ export async function moveFile(
   error?: string;
 }> {
   try {
-    const drive = await getDriveClient();
+    const drive = await getDriveClient(accountId);
 
     // First get current parents
     const currentFile = await drive.files.get({
@@ -597,6 +619,7 @@ export async function createFile(
   content: string,
   mimeType: string = 'text/plain',
   parentFolderId?: string,
+  accountId?: string,
 ): Promise<{
   success: boolean;
   file?: {
@@ -608,7 +631,7 @@ export async function createFile(
   error?: string;
 }> {
   try {
-    const drive = await getDriveClient();
+    const drive = await getDriveClient(accountId);
     const { Readable } = await import('stream');
 
     const fileMetadata: {
@@ -670,13 +693,14 @@ export async function createFile(
 export async function deleteFile(
   fileId: string,
   permanent = false,
+  accountId?: string,
 ): Promise<{
   success: boolean;
   message?: string;
   error?: string;
 }> {
   try {
-    const drive = await getDriveClient();
+    const drive = await getDriveClient(accountId);
 
     if (permanent) {
       // Permanently delete
@@ -696,6 +720,197 @@ export async function deleteFile(
         message: `File ${fileId} moved to trash`,
       };
     }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+// Cache slides clients per account
+const slidesClients = new Map<string, ReturnType<typeof google.slides>>();
+
+/**
+ * Get authenticated Slides client for a specific account
+ */
+export async function getSlidesClient(accountId: string = DEFAULT_ACCOUNT_ID) {
+  // Check cache
+  const cached = slidesClients.get(accountId);
+  if (cached) {
+    return cached;
+  }
+
+  const { oauth2Client } = await getOAuth2Client();
+
+  // Try to load saved token for this account
+  let token = await loadSavedToken(accountId);
+
+  if (token) {
+    oauth2Client.setCredentials({
+      access_token: token.access_token,
+      refresh_token: token.refresh_token,
+      expiry_date: token.expiry_date,
+    });
+
+    // Check if token needs refresh
+    if (token.expiry_date && token.expiry_date < Date.now()) {
+      console.error(`[Slides:${accountId}] Token expired, refreshing...`);
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      token = {
+        access_token: credentials.access_token || '',
+        refresh_token: credentials.refresh_token || token.refresh_token,
+        scope: credentials.scope || '',
+        token_type: credentials.token_type || 'Bearer',
+        expiry_date: credentials.expiry_date || 0,
+      };
+      await saveToken(token, accountId);
+      oauth2Client.setCredentials(credentials);
+    }
+  } else {
+    // Need to perform OAuth flow
+    console.error(`[Slides:${accountId}] No saved token, performing OAuth flow...`);
+    token = await performOAuthFlow(oauth2Client, accountId);
+    oauth2Client.setCredentials({
+      access_token: token.access_token,
+      refresh_token: token.refresh_token,
+      expiry_date: token.expiry_date,
+    });
+  }
+
+  const client = google.slides({ version: 'v1', auth: oauth2Client });
+  slidesClients.set(accountId, client);
+  return client;
+}
+
+interface SlideContent {
+  slideNumber: number;
+  title?: string;
+  texts: string[];
+  notes?: string;
+}
+
+/**
+ * Extract text from a text element
+ */
+function extractTextFromElement(element: any): string {
+  if (!element?.textElements) return '';
+
+  return element.textElements
+    .filter((te: any) => te.textRun?.content)
+    .map((te: any) => te.textRun.content)
+    .join('')
+    .trim();
+}
+
+/**
+ * Read Google Slides presentation and extract text content
+ */
+export async function readSlides(
+  presentationId: string,
+  options?: {
+    includeNotes?: boolean;
+    accountId?: string;
+  },
+): Promise<{
+  success: boolean;
+  title?: string;
+  slideCount?: number;
+  slides?: SlideContent[];
+  fullText?: string;
+  error?: string;
+}> {
+  try {
+    const slides = await getSlidesClient(options?.accountId);
+
+    // Get the presentation
+    const presentation = await slides.presentations.get({
+      presentationId,
+    });
+
+    const title = presentation.data.title || 'Untitled';
+    const slidePages = presentation.data.slides || [];
+    const slideContents: SlideContent[] = [];
+
+    for (let i = 0; i < slidePages.length; i++) {
+      const page = slidePages[i];
+      if (!page) continue;
+
+      const slideContent: SlideContent = {
+        slideNumber: i + 1,
+        texts: [],
+      };
+
+      // Extract text from page elements
+      if (page.pageElements) {
+        for (const element of page.pageElements) {
+          // Handle shapes with text
+          if (element.shape?.text) {
+            const text = extractTextFromElement(element.shape.text);
+            if (text) {
+              // Check if this might be the title (first text box, or placeholder type)
+              if (
+                element.shape.placeholder?.type === 'TITLE' ||
+                element.shape.placeholder?.type === 'CENTERED_TITLE'
+              ) {
+                slideContent.title = text;
+              } else {
+                slideContent.texts.push(text);
+              }
+            }
+          }
+
+          // Handle tables
+          if (element.table) {
+            const tableTexts: string[] = [];
+            for (const row of element.table.tableRows || []) {
+              for (const cell of row.tableCells || []) {
+                if (cell.text) {
+                  const text = extractTextFromElement(cell.text);
+                  if (text) tableTexts.push(text);
+                }
+              }
+            }
+            if (tableTexts.length > 0) {
+              slideContent.texts.push(tableTexts.join(' | '));
+            }
+          }
+        }
+      }
+
+      // Get speaker notes if requested
+      if (options?.includeNotes && page.slideProperties?.notesPage?.pageElements) {
+        for (const element of page.slideProperties.notesPage.pageElements) {
+          if (element.shape?.text && element.shape.placeholder?.type === 'BODY') {
+            const notesText = extractTextFromElement(element.shape.text);
+            if (notesText) {
+              slideContent.notes = notesText;
+            }
+          }
+        }
+      }
+
+      slideContents.push(slideContent);
+    }
+
+    // Create full text version
+    const fullText = slideContents
+      .map((slide) => {
+        let text = `--- Slide ${slide.slideNumber} ---\n`;
+        if (slide.title) text += `# ${slide.title}\n`;
+        if (slide.texts.length > 0) text += slide.texts.join('\n');
+        if (slide.notes) text += `\n[Notes: ${slide.notes}]`;
+        return text;
+      })
+      .join('\n\n');
+
+    return {
+      success: true,
+      title,
+      slideCount: slideContents.length,
+      slides: slideContents,
+      fullText,
+    };
   } catch (error) {
     return {
       success: false,

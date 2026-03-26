@@ -18,8 +18,9 @@ import {
   moveFile as driveMoveFile,
   deleteFile as driveDeleteFile,
   createFile as driveCreateFile,
+  readSlides as slidesRead,
 } from './tools/gdrive.js';
-import { getYoutubeTranscript } from './tools/youtube.js';
+// import { getYoutubeTranscript } from './tools/youtube.js';
 import { sendNotification } from './tools/notify.js';
 import {
   submitExpenseForm,
@@ -29,29 +30,41 @@ import {
   type ExpenseEntry,
 } from './tools/expenseForm.js';
 import { getFocusHistory } from './tools/raycastFocus.js';
-import { transcribeDriveFolder, transcribeLocalAudio } from './tools/whisper.js';
+// import { transcribeDriveFolder, transcribeLocalAudio } from './tools/whisper.js';
+import {
+  search as notionSearch,
+  queryDatabase as notionQueryDatabase,
+  getPage as notionGetPage,
+  getBlockChildren as notionGetBlockChildren,
+  createPage as notionCreatePage,
+  updatePage as notionUpdatePage,
+  appendBlocks as notionAppendBlocks,
+} from './tools/notion.js';
 
 // Clasp GAS runner directory
 const CLASP_RUNNER_DIR = `${process.env.HOME}/clasp-gas-runner`;
 
 // GAS Web App URL
+// GAS Web App URL - 再デプロイ時はGASエディタ(script.google.com)で
+// Deploy > New deployment > Web app > Anyone でデプロイし、URLを更新する。
+// 認証が切れた場合: clasp login --no-localhost → Playwright でブラウザ認証
 const GAS_WEB_APP_URL =
-  'https://script.google.com/macros/s/AKfycbzOhx_Ycze5QTN8-1h8UGjJUMHflIkTzIgnTKUyWJNCuo61rpE6tutJ9KszPRfDboK0Cg/exec';
+  'https://script.google.com/macros/s/AKfycbxVKGCq9lV2wLWex-tdGlzhB3aXZ2djtvgEDRLNLoriYy2wDMxNik-mqhaha5h2YqRN5g/exec';
 
 // --------------------------
 // SIMPLE DEBUG MODE
 // --------------------------
-async function debugMode() {
-  console.log('=== DEBUG MODE: running manual test ===');
-
-  // ★★★ 本番テスト: transcribeDriveFolder ★★★
-  const result = await transcribeDriveFolder(
-    'https://drive.google.com/drive/folders/1xEBm1J1ID92_wpcB_uPWBqG2PT8VfXwu'
-  );
-
-  console.log('DEBUG RESULT:\n', JSON.stringify(result, null, 2));
-  process.exit(0);
-}
+// async function debugMode() {
+//   console.log('=== DEBUG MODE: running manual test ===');
+//
+//   // ★★★ 本番テスト: transcribeDriveFolder ★★★
+//   const result = await transcribeDriveFolder(
+//     'https://drive.google.com/drive/folders/1xEBm1J1ID92_wpcB_uPWBqG2PT8VfXwu'
+//   );
+//
+//   console.log('DEBUG RESULT:\n', JSON.stringify(result, null, 2));
+//   process.exit(0);
+// }
 
 // --------------------------
 // MCP SERVER
@@ -403,10 +416,14 @@ server.registerTool(
         .number()
         .optional()
         .describe('Number of results to return (default: 20)'),
+      account_id: z
+        .string()
+        .optional()
+        .describe('Account ID to use (e.g., "default", "work"). Defaults to "default"'),
     },
   },
   async (params: any) => {
-    const result = await driveSearchFiles(params.query, params.page_size);
+    const result = await driveSearchFiles(params.query, params.page_size, params.account_id);
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
@@ -429,6 +446,10 @@ server.registerTool(
         .number()
         .optional()
         .describe('Number of results to return (default: 20)'),
+      account_id: z
+        .string()
+        .optional()
+        .describe('Account ID to use (e.g., "default", "work"). Defaults to "default"'),
     },
   },
   async (params: any) => {
@@ -437,6 +458,7 @@ server.registerTool(
       query: params.query,
       mimeType: params.mime_type,
       pageSize: params.page_size,
+      accountId: params.account_id,
     });
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -451,10 +473,14 @@ server.registerTool(
       'Read and extract text content from a PDF file in Google Drive. Provide the file ID.',
     inputSchema: {
       file_id: z.string().describe('Google Drive file ID of the PDF'),
+      account_id: z
+        .string()
+        .optional()
+        .describe('Account ID to use (e.g., "default", "work"). Defaults to "default"'),
     },
   },
   async (params: any) => {
-    const result = await driveReadPdf(params.file_id);
+    const result = await driveReadPdf(params.file_id, params.account_id);
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
@@ -468,10 +494,14 @@ server.registerTool(
       'Read content from a file in Google Drive. Supports PDF (text extraction), Google Docs (as plain text), Google Sheets (as CSV), and other text files.',
     inputSchema: {
       file_id: z.string().describe('Google Drive file ID'),
+      account_id: z
+        .string()
+        .optional()
+        .describe('Account ID to use (e.g., "default", "work"). Defaults to "default"'),
     },
   },
   async (params: any) => {
-    const result = await driveReadFile(params.file_id);
+    const result = await driveReadFile(params.file_id, params.account_id);
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
@@ -489,12 +519,17 @@ server.registerTool(
         .string()
         .optional()
         .describe('Parent folder ID (optional, defaults to root)'),
+      account_id: z
+        .string()
+        .optional()
+        .describe('Account ID to use (e.g., "default", "work"). Defaults to "default"'),
     },
   },
   async (params: any) => {
     const result = await driveCreateFolder(
       params.folder_name,
       params.parent_folder_id,
+      params.account_id,
     );
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -515,12 +550,17 @@ server.registerTool(
         .string()
         .optional()
         .describe('Parent folder ID (optional, defaults to root)'),
+      account_id: z
+        .string()
+        .optional()
+        .describe('Account ID to use (e.g., "default", "work"). Defaults to "default"'),
     },
   },
   async (params: any) => {
     const result = await driveCreateFoldersBatch(
       params.folder_names,
       params.parent_folder_id,
+      params.account_id,
     );
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -536,10 +576,14 @@ server.registerTool(
     inputSchema: {
       file_id: z.string().describe('ID of the file or folder to move'),
       new_parent_id: z.string().describe('ID of the destination folder'),
+      account_id: z
+        .string()
+        .optional()
+        .describe('Account ID to use (e.g., "default", "work"). Defaults to "default"'),
     },
   },
   async (params: any) => {
-    const result = await driveMoveFile(params.file_id, params.new_parent_id);
+    const result = await driveMoveFile(params.file_id, params.new_parent_id, params.account_id);
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
@@ -557,10 +601,14 @@ server.registerTool(
         .boolean()
         .optional()
         .describe('If true, permanently delete; if false (default), move to trash'),
+      account_id: z
+        .string()
+        .optional()
+        .describe('Account ID to use (e.g., "default", "work"). Defaults to "default"'),
     },
   },
   async (params: any) => {
-    const result = await driveDeleteFile(params.file_id, params.permanent);
+    const result = await driveDeleteFile(params.file_id, params.permanent, params.account_id);
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
@@ -585,6 +633,10 @@ server.registerTool(
         .string()
         .optional()
         .describe('ID of the parent folder. If not specified, creates in root'),
+      account_id: z
+        .string()
+        .optional()
+        .describe('Account ID to use (e.g., "default", "work"). Defaults to "default"'),
     },
   },
   async (params: any) => {
@@ -593,6 +645,7 @@ server.registerTool(
       params.content,
       params.mime_type || 'text/plain',
       params.parent_folder_id,
+      params.account_id,
     );
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
@@ -601,29 +654,76 @@ server.registerTool(
 );
 
 // --------------------------
-// YOUTUBE TOOLS
+// GOOGLE SLIDES TOOLS
 // --------------------------
 
 server.registerTool(
-  'youtube_transcript',
+  'slides_read',
   {
     description:
-      'Download YouTube video transcript/subtitles and save as plain text file. Removes timestamps and deduplicates text. Uses yt-dlp (must be installed).',
+      'Read and extract text content from a Google Slides presentation. Returns slide titles, text content, and optionally speaker notes. Provide either presentation ID or full URL.',
     inputSchema: {
-      url: z.string().describe('YouTube URL (regular or shortened format)'),
-      lang: z
+      presentation_id: z
+        .string()
+        .describe(
+          'Google Slides presentation ID (from URL: docs.google.com/presentation/d/{ID}/...) or full URL',
+        ),
+      include_notes: z
+        .boolean()
+        .optional()
+        .describe('Include speaker notes in output (default: false)'),
+      account_id: z
         .string()
         .optional()
-        .describe('Subtitle language code (default: "ja")'),
+        .describe('Account ID to use (e.g., "default", "work"). Defaults to "default"'),
     },
   },
-  async (params: any) => {
-    const result = await getYoutubeTranscript(params.url, params.lang);
+  async (params: {
+    presentation_id: string;
+    include_notes?: boolean | undefined;
+    account_id?: string | undefined;
+  }) => {
+    // Extract presentation ID from URL if needed
+    let presentationId = params.presentation_id;
+    const urlMatch = presentationId.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (urlMatch && urlMatch[1]) {
+      presentationId = urlMatch[1];
+    }
+
+    const result = await slidesRead(presentationId, {
+      ...(params.include_notes !== undefined && { includeNotes: params.include_notes }),
+      ...(params.account_id !== undefined && { accountId: params.account_id }),
+    });
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     };
   },
 );
+
+// --------------------------
+// YOUTUBE TOOLS (disabled)
+// --------------------------
+
+// server.registerTool(
+//   'youtube_transcript',
+//   {
+//     description:
+//       'Download YouTube video transcript/subtitles and save as plain text file. Removes timestamps and deduplicates text. Uses yt-dlp (must be installed).',
+//     inputSchema: {
+//       url: z.string().describe('YouTube URL (regular or shortened format)'),
+//       lang: z
+//         .string()
+//         .optional()
+//         .describe('Subtitle language code (default: "ja")'),
+//     },
+//   },
+//   async (params: any) => {
+//     const result = await getYoutubeTranscript(params.url, params.lang);
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+//     };
+//   },
+// );
 
 // --------------------------
 // NOTIFICATION TOOLS
@@ -838,9 +938,6 @@ server.registerTool(
   },
   async (params: { code: string }) => {
     try {
-      const fetchModule = await import('node-fetch');
-      const fetch = fetchModule.default;
-
       // URL encode the code and send via GET
       const encodedCode = encodeURIComponent(params.code);
       const url = `${GAS_WEB_APP_URL}?code=${encodedCode}`;
@@ -918,9 +1015,6 @@ server.registerTool(
   },
   async (params: { fn: string; args: unknown[] }) => {
     try {
-      const fetchModule = await import('node-fetch');
-      const fetch = fetchModule.default;
-
       const encodedArgs = encodeURIComponent(JSON.stringify(params.args));
       const url = `${GAS_WEB_APP_URL}?fn=${params.fn}&args=${encodedArgs}`;
 
@@ -1009,50 +1103,245 @@ server.registerTool(
 );
 
 // --------------------------
-// WHISPER TRANSCRIPTION TOOLS
+// WHISPER TRANSCRIPTION TOOLS (disabled)
 // --------------------------
 
-server.registerTool(
-  'whisper_transcribe_folder',
-  {
-    description:
-      'Download MP3 files from a Google Drive folder and transcribe them to Japanese text using Whisper. Saves transcripts to mcp-server/transcripts/<folder_name>/',
-    inputSchema: {
-      folder_url: z
-        .string()
-        .describe('Google Drive folder URL containing MP3 files'),
-    },
-  },
-  async (params: { folder_url: string }) => {
-    const result = await transcribeDriveFolder(params.folder_url);
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
-  },
-);
+// server.registerTool(
+//   'whisper_transcribe_folder',
+//   {
+//     description:
+//       'Download MP3 files from a Google Drive folder and transcribe them to Japanese text using Whisper. Saves transcripts to mcp-server/transcripts/<folder_name>/',
+//     inputSchema: {
+//       folder_url: z
+//         .string()
+//         .describe('Google Drive folder URL containing MP3 files'),
+//     },
+//   },
+//   async (params: { folder_url: string }) => {
+//     const result = await transcribeDriveFolder(params.folder_url);
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+//     };
+//   },
+// );
 
-server.registerTool(
-  'whisper_transcribe_local',
-  {
-    description:
-      'Transcribe a local audio file (m4a, mp3, wav, etc.) to Japanese text using Whisper (medium model). Output is saved to /Users/kurikinton/Documents/niko-dev/cache-files/',
-    inputSchema: {
-      audio_path: z
-        .string()
-        .describe('Absolute path to the local audio file (e.g., /path/to/file.m4a)'),
-      output_name: z
-        .string()
-        .optional()
-        .describe('Output file name (without .txt extension). If omitted, uses the original audio file name.'),
-    },
-  },
-  async (params: { audio_path: string; output_name?: string | undefined }) => {
-    const result = await transcribeLocalAudio(params.audio_path, params.output_name);
-    return {
-      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-    };
-  },
-);
+// server.registerTool(
+//   'whisper_transcribe_local',
+//   {
+//     description:
+//       'Transcribe a local audio file (m4a, mp3, wav, etc.) to Japanese text using Whisper (medium model). Output is saved to /Users/kurikinton/Documents/niko-dev/cache-files/',
+//     inputSchema: {
+//       audio_path: z
+//         .string()
+//         .describe('Absolute path to the local audio file (e.g., /path/to/file.m4a)'),
+//       output_name: z
+//         .string()
+//         .optional()
+//         .describe('Output file name (without .txt extension). If omitted, uses the original audio file name.'),
+//     },
+//   },
+//   async (params: { audio_path: string; output_name?: string | undefined }) => {
+//     const result = await transcribeLocalAudio(params.audio_path, params.output_name);
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+//     };
+//   },
+// );
+
+// --------------------------
+// NOTION TOOLS (disabled — using claude_ai_Notion connector instead)
+// Implementation: src/tools/notion.ts (kept for future use with personal workspace)
+// --------------------------
+
+// const WORKSPACE_DESC =
+//   'Notion workspace: "personal" = 佑弥\'s Notion (default), "work" = 株式会社QuackShift';
+//
+// server.registerTool(
+//   'notion_search',
+//   {
+//     description: `Search Notion pages and databases by keyword. ${WORKSPACE_DESC}`,
+//     inputSchema: {
+//       query: z.string().describe('Search query text'),
+//       filter: z
+//         .object({
+//           property: z.literal('object'),
+//           value: z.enum(['page', 'database']),
+//         })
+//         .optional()
+//         .describe('Filter by object type: "page" or "database"'),
+//       workspace: z
+//         .string()
+//         .optional()
+//         .describe(WORKSPACE_DESC),
+//     },
+//   },
+//   async (params: any) => {
+//     const result = await notionSearch(params.query, params.filter, params.workspace);
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+//     };
+//   },
+// );
+//
+// server.registerTool(
+//   'notion_query_database',
+//   {
+//     description: `Query a Notion database with optional filter and sort. ${WORKSPACE_DESC}`,
+//     inputSchema: {
+//       database_id: z.string().describe('Notion database ID'),
+//       filter: z.record(z.any()).optional().describe('Notion filter object'),
+//       sorts: z.array(z.any()).optional().describe('Notion sorts array'),
+//       start_cursor: z.string().optional().describe('Pagination cursor'),
+//       page_size: z.number().optional().describe('Number of results (max 100)'),
+//       workspace: z
+//         .string()
+//         .optional()
+//         .describe(WORKSPACE_DESC),
+//     },
+//   },
+//   async (params: any) => {
+//     const result = await notionQueryDatabase(
+//       params.database_id,
+//       params.filter,
+//       params.sorts,
+//       params.start_cursor,
+//       params.page_size,
+//       params.workspace,
+//     );
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+//     };
+//   },
+// );
+//
+// server.registerTool(
+//   'notion_get_page',
+//   {
+//     description: `Get a Notion page's properties by ID. ${WORKSPACE_DESC}`,
+//     inputSchema: {
+//       page_id: z.string().describe('Notion page ID'),
+//       workspace: z
+//         .string()
+//         .optional()
+//         .describe(WORKSPACE_DESC),
+//     },
+//   },
+//   async (params: any) => {
+//     const result = await notionGetPage(params.page_id, params.workspace);
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+//     };
+//   },
+// );
+//
+// server.registerTool(
+//   'notion_get_block_children',
+//   {
+//     description: `Get child blocks of a Notion page or block (read page content). ${WORKSPACE_DESC}`,
+//     inputSchema: {
+//       block_id: z.string().describe('Block or page ID'),
+//       start_cursor: z.string().optional().describe('Pagination cursor'),
+//       page_size: z.number().optional().describe('Number of blocks to return (max 100)'),
+//       workspace: z
+//         .string()
+//         .optional()
+//         .describe(WORKSPACE_DESC),
+//     },
+//   },
+//   async (params: any) => {
+//     const result = await notionGetBlockChildren(
+//       params.block_id,
+//       params.start_cursor,
+//       params.page_size,
+//       params.workspace,
+//     );
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+//     };
+//   },
+// );
+//
+// server.registerTool(
+//   'notion_create_page',
+//   {
+//     description: `Create a new page in Notion. ${WORKSPACE_DESC}`,
+//     inputSchema: {
+//       parent: z
+//         .record(z.any())
+//         .describe('Parent object, e.g. { database_id: "..." } or { page_id: "..." }'),
+//       properties: z.record(z.any()).describe('Page properties object'),
+//       children: z
+//         .array(z.any())
+//         .optional()
+//         .describe('Array of block objects for page content'),
+//       workspace: z
+//         .string()
+//         .optional()
+//         .describe(WORKSPACE_DESC),
+//     },
+//   },
+//   async (params: any) => {
+//     const result = await notionCreatePage(
+//       params.parent,
+//       params.properties,
+//       params.children,
+//       params.workspace,
+//     );
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+//     };
+//   },
+// );
+//
+// server.registerTool(
+//   'notion_update_page',
+//   {
+//     description: `Update a Notion page's properties. ${WORKSPACE_DESC}`,
+//     inputSchema: {
+//       page_id: z.string().describe('Notion page ID to update'),
+//       properties: z.record(z.any()).describe('Properties to update'),
+//       workspace: z
+//         .string()
+//         .optional()
+//         .describe(WORKSPACE_DESC),
+//     },
+//   },
+//   async (params: any) => {
+//     const result = await notionUpdatePage(
+//       params.page_id,
+//       params.properties,
+//       params.workspace,
+//     );
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+//     };
+//   },
+// );
+//
+// server.registerTool(
+//   'notion_append_blocks',
+//   {
+//     description: `Append child blocks to a Notion page or block. ${WORKSPACE_DESC}`,
+//     inputSchema: {
+//       block_id: z.string().describe('Block or page ID to append to'),
+//       children: z.array(z.any()).describe('Array of block objects to append'),
+//       workspace: z
+//         .string()
+//         .optional()
+//         .describe(WORKSPACE_DESC),
+//     },
+//   },
+//   async (params: any) => {
+//     const result = await notionAppendBlocks(
+//       params.block_id,
+//       params.children,
+//       params.workspace,
+//     );
+//     return {
+//       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+//     };
+//   },
+// );
 
 async function main() {
   console.error('MCP server started (debug log)');
@@ -1061,10 +1350,10 @@ async function main() {
 }
 
 // debug のみなら debugMode を実行して終了
-if (process.argv[2] === 'debug') {
-  debugMode();
-} else {
-  main().catch((err) => {
-    console.error('MCP server failed:', err);
-  });
-}
+// if (process.argv[2] === 'debug') {
+//   debugMode();
+// } else {
+main().catch((err) => {
+  console.error('MCP server failed:', err);
+});
+// }
